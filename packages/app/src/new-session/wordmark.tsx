@@ -1,60 +1,8 @@
-import { Logo } from "@opencode/ui/logo"
+import { HoushiarLetters, Logo } from "@opencode/ui/logo"
 import { prefersReducedMotion } from "@opencode/ui/motion"
 import { For, onCleanup, onMount, Show } from "solid-js"
 import { PinSound } from "./pin-sound"
 import "./wordmark.css"
-
-// Each letter in the 234×42 logo viewBox, with its counter shadow, stem, and bottom-centre pivot.
-const LETTERS = [
-  {
-    cx: 12,
-    weak: "M18 30H6V18H18V30Z",
-    fill: "var(--icon-base)",
-    stem: "M18 12H6V30H18V12ZM24 36H0V6H24V36Z",
-  },
-  {
-    cx: 42,
-    weak: "M48 30H36V18H48V30Z",
-    fill: "var(--icon-base)",
-    stem: "M36 30H48V12H36V30ZM54 36H36V42H30V6H54V36Z",
-  },
-  {
-    cx: 72,
-    weak: "M84 24V30H66V24H84Z",
-    fill: "var(--icon-base)",
-    stem: "M84 24H66V30H84V36H60V6H84V24ZM66 18H78V12H66V18Z",
-  },
-  {
-    cx: 102,
-    weak: "M108 36H96V18H108V36Z",
-    fill: "var(--icon-base)",
-    stem: "M108 12H96V36H90V6H108V12ZM114 36H108V12H114V36Z",
-  },
-  {
-    cx: 132,
-    weak: "M144 30H126V18H144V30Z",
-    fill: "var(--icon-strong-base)",
-    stem: "M144 12H126V30H144V36H120V6H144V12Z",
-  },
-  {
-    cx: 162,
-    weak: "M168 30H156V18H168V30Z",
-    fill: "var(--icon-strong-base)",
-    stem: "M168 12H156V30H168V12ZM174 36H150V6H174V36Z",
-  },
-  {
-    cx: 192,
-    weak: "M198 30H186V18H198V30Z",
-    fill: "var(--icon-strong-base)",
-    stem: "M198 12H186V30H198V12ZM204 36H180V6H198V0H204V36Z",
-  },
-  {
-    cx: 222,
-    weak: "M234 24V30H216V24H234Z",
-    fill: "var(--icon-strong-base)",
-    stem: "M216 12V18H228V12H216ZM234 24H216V30H234V36H210V6H234V24Z",
-  },
-] as const
 
 // Lodger geometry, in the logo's 234×42 viewBox units. The lodger is drawn from its bottom centre.
 const W = 234
@@ -197,7 +145,7 @@ function WordmarkLodger(props: {
     <div ref={stage} class="absolute">
       <div ref={flat} data-slot="wordmark-flat" class="absolute inset-0">
         <svg viewBox="0 0 234 42" fill="none" class="block size-full overflow-visible">
-          <For each={LETTERS}>
+          <For each={HoushiarLetters}>
             {(item, i) => (
               <g ref={(el) => (letters[i()] = el)}>
                 <g class="opacity-[0.16]">
@@ -270,7 +218,7 @@ function mountLodger(
   onPlay?: (ball: LodgerBall) => void,
 ) {
   const still = prefersReducedMotion()
-  const poses: LetterPose[] = LETTERS.map(() => ({ x: 0, y: 0, sx: 1, sy: 1, opacity: 1 }))
+  const poses: LetterPose[] = HoushiarLetters.map(() => ({ x: 0, y: 0, sx: 1, sy: 1, opacity: 1 }))
   const c = {
     phase: "hidden" as Phase,
     now: 0,
@@ -335,8 +283,12 @@ function mountLodger(
     if (!l.width) return
     const s = parts.box.closest('[data-component="new-session"]')?.getBoundingClientRect()
     const pitch = Math.max(3, Math.round(l.width / 78))
-    const x = s ? Math.round(l.left - s.left + (l.width - pitch * 78) / 2) - (l.left - s.left) : (l.width - pitch * 78) / 2
-    const y = s ? Math.round(l.top - s.top + (l.height - pitch * 14) / 2) - (l.top - s.top) : (l.height - pitch * 14) / 2
+    const x = s
+      ? Math.round(l.left - s.left + (l.width - pitch * 78) / 2) - (l.left - s.left)
+      : (l.width - pitch * 78) / 2
+    const y = s
+      ? Math.round(l.top - s.top + (l.height - pitch * 14) / 2) - (l.top - s.top)
+      : (l.height - pitch * 14) / 2
     parts.stage.style.left = `${x}px`
     parts.stage.style.top = `${y}px`
     parts.stage.style.width = `${pitch * 78}px`
@@ -910,7 +862,7 @@ function mountLodger(
         `translate(${c.pinX} ${c.pinY}) rotate(${c.pinRot}) scale(${c.pinScale})`,
       )
     poses.forEach((p, i) => {
-      const cx = LETTERS[i].cx
+      const cx = HoushiarLetters[i].cx
       const el = parts.letters[i]
       if (!el) return
       put(`letter-${i}`, (value) => (el.style.opacity = value), `${p.opacity}`)

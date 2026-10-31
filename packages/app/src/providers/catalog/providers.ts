@@ -90,16 +90,15 @@ export function useProviders(directory: Accessor<string | undefined>) {
         (v) => Array.from(v),
       )
     },
-    // Any stored or detected connection, or a provider with models beyond the keyless OpenCode catalog.
-    // Undefined until both catalogs load, so callers never mistake loading for a first run.
+    // An MCP sign-in must not bypass the Houshiar API key setup.
     anyConnection: () => {
       if (!integrations.ready() || !ready()) return undefined
-
-      if (integrations.list().some((integration) => integration.connections.length > 0)) return true
-
-      return providers().connected.some(
-        (id) => id !== "opencode" && Object.keys(providers().all.get(id)?.models ?? {}).length > 0,
-      )
+      return integrations
+        .list()
+        .some(
+          (integration) =>
+            integration.id === "houshiar" && integration.connections.some((connection) => !connection.status),
+        )
     },
     paid: () => {
       const connected = new Set(providers().connected)

@@ -1,0 +1,132 @@
+name: Houshiar release
+run-name: Houshiar ${{ github.ref_name }}
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: houshiar-release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    if: github.repository == 'diyakou/hcode'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: windows-x64
+            cli: windows-x64-baseline
+            runner: windows-2025
+            executable: opencode.exe
+          - target: linux-x64
+            cli: linux-x64-baseline
+            runner: ubuntu-24.04
+            executable: opencode
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      OPENCODE_CHANNEL: latest
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Enable checkout symlinks
+        run: git config --global core.symlinks true
+      - name: Checkout tagged source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - name: Set release version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          echo "OPENCODE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+      - name: Set up Bun and dependencies
+        uses: ./.github/actions/setup-bun
+      - name: Test Houshiar gateway and saved-key activation
+        working-directory: packages/core
+        run: bun run script/test.ts test/houshiar.test.ts test/plugin/provider-houshiar.test.ts
+      - name: Install Linux packaging tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends rpm
+      - name: Build bundled CLI
+        working-directory: packages/cli
+        run: bun run build --single --baseline --skip-install
+        env:
+          OPENCODE_TARGET: ${{ matrix.cli }}
+      - name: Verify CLI version and archive
+        run: |
+          binary="packages/cli/dist/cli-${{ matrix.cli }}/bin/${{ matrix.executable }}"
+          "$binary" --version | grep -F "$RELEASE_VERSION"
+          mkdir -p release
+          tar -czf "release/houshiar-${RELEASE_VERSION}-${{ matrix.target }}-cli.tar.gz" -C "packages/cli/dist/cli-${{ matrix.cli }}" bin
+      - name: Build desktop with customized CLI
+        working-directory: packages/desktop
+        run: bun run build
+        env:
+          OPENCODE_TARGET: ${{ matrix.target }}
+          NODE_OPTIONS: --max-old-space-size=4096
+      - name: Pack desktop
+        working-directory: packages/desktop
+        run: bun run pack
+        env:
+          OPENCODE_TARGET: ${{ matrix.target }}
+      - name: Build Windows installer from unsigned application
+        if: runner.os == 'Windows'
+        run: |
+          cp -a dist/desktop/app "$RUNNER_TEMP/houshiar-app"
+          cd packages/desktop
+          OPENCODE_DESKTOP_APP="$RUNNER_TEMP/houshiar-app" bun run pack
+          cp ../../dist/desktop/*.exe "../../release/houshiar-${RELEASE_VERSION}-windows-x64.exe"
+        env:
+          OPENCODE_TARGET: ${{ matrix.target }}
+      - name: Collect Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          for file in dist/desktop/*; do
+            cp "$file" "release/houshiar-${RELEASE_VERSION}-linux-x64.${file##*.}"
+          done
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: houshiar-${{ matrix.target }}
+          path: release/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout release notes
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - name: Download all release artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: houshiar-*
+          merge-multiple: true
+          path: release
+      - name: Publish Houshiar release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd release
+          sha256sum * > SHA256SUMS.txt
+          cd ..
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "Houshiar ${GITHUB_REF_NAME#v}" --notes-file HOUSHIAR_RELEASE.md --repo "$GITHUB_REPOSITORY"
+          fi
+          gh release upload "$GITHUB_REF_NAME" release/* --clobber --repo "$GITHUB_REPOSITORY"

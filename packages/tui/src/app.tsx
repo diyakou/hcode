@@ -48,6 +48,8 @@ import {
 } from "./context/runtime"
 import { DialogProvider, useDialog } from "./ui/dialog"
 import { DialogIntegration } from "./component/dialog-integration"
+import { Houshiar } from "@opencode/schema/houshiar"
+import { DialogAlert } from "./ui/dialog-alert"
 import { ErrorComponent } from "./component/error-component"
 import { PluginRouteMissing } from "./component/plugin-route-missing"
 import { EditorContextProvider } from "./context/editor"
@@ -749,8 +751,29 @@ function App() {
   })
 
   const connected = useConnected()
+  let houshiarPrompted = false
+  createEffect(() => {
+    if (houshiarPrompted || !plugins.ready() || client.connection.status() !== "connected") return
+    if (process.env.OPENCODE_STORY || process.env.OPENCODE_DRIVE) return
+    const integration = data.location.integration.list(location.ref)?.find((item) => item.id === Houshiar.id)
+    if (!integration || integration.connections.length > 0 || dialog.stack.length > 0) return
+    houshiarPrompted = true
+    dialog.replace(() => <DialogIntegration integrationID={Houshiar.id} autoConnect />)
+  })
   const appCommands = createMemo(() =>
     [
+      {
+        name: "houshiar.usage",
+        title: "Houshiar usage and balance",
+        slash: { name: "usage" },
+        category: "Integration",
+        run: () => {
+          void client.api
+            .rpc(Houshiar.Definition)
+            .usage({}, { location: location.ref })
+            .then((message) => dialog.replace(() => <DialogAlert title="Houshiar" message={message} />), toast.error)
+        },
+      },
       {
         name: COMMAND_PALETTE_COMMAND,
         title: "Show command palette",
@@ -1023,6 +1046,8 @@ function App() {
         run: () => {
           dialog.replace(() => (
             <DialogIntegration
+              integrationID={Houshiar.id}
+              autoConnect
               onConnected={(providerID) => dialog.replace(() => <DialogModel providerID={providerID} />)}
             />
           ))

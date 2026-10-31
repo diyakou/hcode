@@ -4,7 +4,7 @@ import { Icon } from "@opencode/ui/icon"
 import { Slash } from "@opencode/ui/slash"
 import { Keybind } from "@opencode/ui/keybind"
 import { useCommand } from "@/shell/commands/command"
-import { Show, createMemo, createSignal, type JSX } from "solid-js"
+import { Show, createEffect, createMemo, createSignal, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { getFilename } from "@opencode/util/path"
@@ -173,6 +173,16 @@ function NewSessionTips(props: { selection: ComposerModel["model"]["selection"];
   const dialog = useDialog()
   const sdk = useWorkspaceLocation()
   const providers = useProviders(() => sdk().directory)
+  let prompted = false
+  createEffect(() => {
+    if (prompted || providers.anyConnection() !== false) return
+    prompted = true
+    void import("@/providers/connect/dialog").then(({ DialogConnectProvider }) => {
+      void dialog.show(() => (
+        <DialogConnectProvider directory={sdk().directory} selection={props.selection} onDone={props.onDone} />
+      ))
+    })
+  })
 
   const [providerState, setProviderState, , providerReady] = persisted(
     Persist.global("new-session.provider-tip"),

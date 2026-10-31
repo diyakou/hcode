@@ -2,6 +2,15 @@
 
 Release notes for OpenCode V2, newest first.
 
+## v2.2.6 — 2026-10-31
+
+### Houshiar
+
+- Restrict model access to Houshiar and prompt for the user's API key on first launch.
+- Discover models from the gateway and route OpenAI and Anthropic requests through Houshiar.
+- Display account usage and balance with `/usage`.
+- Add Houshiar branding and tag-triggered Windows and Linux release builds.
+
 ## v2.2.5 — 2026-10-30
 
 ### Highlights

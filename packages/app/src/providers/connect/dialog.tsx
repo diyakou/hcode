@@ -87,6 +87,10 @@ export const DialogConnectProvider: Component<{
   const fallback = useProviderConnectController()
   const controller = props.controller ?? fallback
 
+  onMount(() => {
+    if (!controller.selected()) controller.select("houshiar")
+  })
+
   const [state, setState] = createStore<{
     completed: boolean
     modelProvider?: { id: string; name: string }
@@ -270,7 +274,7 @@ export const DialogConnectProvider: Component<{
 const CLAUDE_CODE_SETUP_URL = "https://code.claude.com/docs/en/setup"
 
 // The TUI's integration groups and order, with connected integrations pulled up into their own group first.
-const POPULAR = ["opencode", "opencode-go", "openai", "github-copilot", "anthropic", "google"]
+const POPULAR = ["houshiar"]
 
 function ProviderPicker(props: { directory?: string; onSelect: (provider: string) => void; onPrepare?: () => void }) {
   const integrations = useIntegrations(() => props.directory)

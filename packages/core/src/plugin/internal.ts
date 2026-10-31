@@ -99,11 +99,9 @@ import { CommandPlugin } from "./command.js"
 import { IdentityPlugin } from "./identity.js"
 import { PlanPlugin } from "./plan.js"
 import { GoalPlugin } from "./goal.js"
-import { ModelsDevPlugin } from "./models-dev.js"
 import { McpCodeModeDefaultsPlugin } from "./mcp-codemode-defaults.js"
-import { ProviderPlugins } from "./provider.js"
+import { HoushiarPlugin } from "./provider/houshiar.js"
 import { DynamicProviderPlugin } from "./provider/dynamic.js"
-import { OpencodePlugin } from "./provider/opencode.js"
 import { WebSearchPlugins } from "./websearch/index.js"
 import { SkillPlugin } from "./skill.js"
 import { VcsHgPlugin } from "./vcs/hg.js"
@@ -241,8 +239,6 @@ const pre = [
   GoalPlugin.Plugin,
   SkillPlugin.Plugin,
   VcsHgPlugin.Plugin,
-  ModelsDevPlugin,
-  ...ProviderPlugins,
   ...WebSearchPlugins,
   PatchTool.Plugin,
   // Render model prompts after the patch plugin selects the available editing tools.
@@ -288,12 +284,12 @@ const post = [
   // Run the dynamic npm SDK loader after SDK, instance, and external plugins register their `sdk` hooks.
   DynamicProviderPlugin,
   ConfigWebSearchPlugin.Plugin,
+  HoushiarPlugin,
   ConfigPolicyPlugin.Plugin,
 ] as const satisfies readonly InternalPlugin[]
 
-// Repository config must not switch off policy enforcement or the Console connection that delivers
-// organization statements, so plugin remove operations skip these IDs.
-export const guarded: ReadonlySet<string> = new Set([OpencodePlugin.id, ConfigPolicyPlugin.Plugin.id])
+// This distribution always keeps its provider and policy enforcement active.
+export const guarded: ReadonlySet<string> = new Set([HoushiarPlugin.id, ConfigPolicyPlugin.Plugin.id])
 
 export const list = Effect.fn("PluginInternal.list")(function* () {
   // Capture only services; activation supplies the child Scope and batching context.

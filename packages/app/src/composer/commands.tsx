@@ -6,7 +6,6 @@ import { useDialog } from "@opencode/ui/context/dialog"
 import { useSessionLayout } from "@/session/session-layout"
 import { createSessionOwnership } from "@/session/session-ownership"
 import { useWorkspaceLocation } from "@/workspaces/location"
-import { useData } from "@/runtime/server/current"
 import { useServerSDK } from "@/runtime/server/client"
 import { formatServerError } from "@/runtime/server/errors"
 import { showToast } from "@/shell/notifications/toast"
@@ -25,8 +24,7 @@ export const useComposerCommands = (input: { model?: ModelSelection } = {}) => {
   const language = useLanguage()
   const local = useLocal()
   const workspace = useWorkspaceLocation()
-  const { sessionKey, params } = useSessionLayout()
-  const data = useData()
+  const { sessionKey } = useSessionLayout()
   const sdk = useServerSDK()
   const sessionOwnership = createSessionOwnership(sessionKey)
   const model = input.model ?? local.model
@@ -72,22 +70,8 @@ export const useComposerCommands = (input: { model?: ModelSelection } = {}) => {
   }
 
   const viewUsage = async () => {
-    const { DialogUsage } = await import("@/usage/dialog")
-    const current = model.current()
-
-    // Console refuses with 402 only when the workspace can't pay, which the dialog explains.
-    const last = params.id
-      ? data.session.message.list(params.id)?.findLast((message) => message.type === "assistant")
-      : undefined
-
-    void dialog.show(() => (
-      <DialogUsage
-        location={workspace().ref}
-        model={current && { providerID: current.provider.id, modelID: current.id, name: current.name }}
-        credits={last?.type === "assistant" && last.error?.status === 402}
-        onSwitchModel={chooseModel}
-      />
-    ))
+    const { HoushiarUsageDialog } = await import("@/usage/houshiar")
+    void dialog.show(() => <HoushiarUsageDialog location={workspace().ref} />)
   }
 
   command.register("composer", () => [
@@ -110,6 +94,7 @@ export const useComposerCommands = (input: { model?: ModelSelection } = {}) => {
       id: "usage.view",
       title: language.t("command.usage.view"),
       description: language.t("command.usage.view.description"),
+      slash: "usage",
       onSelect: () => void viewUsage(),
     }),
     providerCommand({
