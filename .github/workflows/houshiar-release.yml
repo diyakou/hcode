@@ -1,15 +1,25 @@
 name: Houshiar release
-run-name: Houshiar ${{ github.ref_name }}
+run-name: Houshiar ${{ inputs.tag || github.ref_name }}
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build
+        required: true
+        default: v2.2.6
+        type: string
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 permissions:
   contents: read
 
 concurrency:
-  group: houshiar-release-${{ github.ref }}
+  group: houshiar-release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 defaults:
@@ -43,10 +53,11 @@ jobs:
       - name: Checkout tagged source
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
+          ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
       - name: Set release version
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${RELEASE_TAG#v}"
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
           echo "OPENCODE_VERSION=$version" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
@@ -112,6 +123,7 @@ jobs:
       - name: Checkout release notes
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
+          ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
       - name: Download all release artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -126,7 +138,7 @@ jobs:
           cd release
           sha256sum * > SHA256SUMS.txt
           cd ..
-          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$GITHUB_REF_NAME" --verify-tag --title "Houshiar ${GITHUB_REF_NAME#v}" --notes-file HOUSHIAR_RELEASE.md --repo "$GITHUB_REPOSITORY"
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --title "Houshiar ${RELEASE_TAG#v}" --notes-file HOUSHIAR_RELEASE.md --repo "$GITHUB_REPOSITORY"
           fi
-          gh release upload "$GITHUB_REF_NAME" release/* --clobber --repo "$GITHUB_REPOSITORY"
+          gh release upload "$RELEASE_TAG" release/* --clobber --repo "$GITHUB_REPOSITORY"
