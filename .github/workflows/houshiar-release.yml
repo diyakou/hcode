@@ -50,7 +50,7 @@ jobs:
             cli: darwin-x64-baseline
             runner: macos-14
             executable: opencode
-            install: --os=darwin --cpu=x64
+            install: --os=darwin --cpu=*
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
