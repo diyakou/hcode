@@ -21,7 +21,11 @@ const maxDepth = 6
 
 // Tool names models carry over from other harnesses, used only when no tool has that name.
 // The result tells the model which tool ran, so it calls that one next time.
-const aliases = new Map([["bash", "shell"]])
+const aliases = new Map([
+  ["bash", "shell"],
+  ["task", "subagent"],
+  ["agent", "subagent"],
+])
 
 export const Plugin = define({
   id: "opencode.tool.input.repair",

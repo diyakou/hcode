@@ -5,6 +5,7 @@ import { Model } from "@opencode/schema/model"
 import { Provider } from "@opencode/schema/provider"
 import { Effect, Option, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
+import { Variant } from "./variant.js"
 
 const RemoteModel = Schema.Struct({
   id: Schema.NonEmptyString,
@@ -44,19 +45,31 @@ export const models = Effect.fn("Houshiar.models")(function* (http: HttpClient.H
       const remote = Option.getOrUndefined(decodeModel(item))
       if (!remote) return []
       const model = Model.Info.default(Provider.ID.make(Houshiar.id), Model.ID.make(remote.id))
+      const isClaude = remote.id.toLowerCase().includes("claude")
+      const output = remote.max_output_tokens ?? model.limit.output
+      const configured: Model.Info = {
+        ...model,
+        name: remote.name || remote.id,
+        // The gateway accepts the complete catalogue ID, including account/provider prefixes.
+        package: isClaude ? "@opencode/ai/providers/anthropic-compatible" : "@opencode/ai/providers/openai-compatible",
+        settings: { baseURL: Houshiar.baseURL },
+        limit: {
+          context: remote.context_length ?? model.limit.context,
+          output,
+        },
+      }
+      const variants = Variant.resolve(configured)
+      const defaultThinking =
+        variants.find((variant) => variant.id === "high")?.settings ??
+        variants.find((variant) => variant.id === "thinking")?.settings
       return [
         {
-          ...model,
-          name: remote.name || remote.id,
-          // The gateway accepts the complete catalogue ID, including account/provider prefixes.
-          package: remote.id.toLowerCase().includes("claude")
-            ? "@opencode/ai/providers/anthropic-compatible"
-            : "@opencode/ai/providers/openai-compatible",
-          settings: { baseURL: Houshiar.baseURL },
-          limit: {
-            context: remote.context_length ?? model.limit.context,
-            output: remote.max_output_tokens ?? model.limit.output,
+          ...configured,
+          settings: {
+            ...configured.settings,
+            ...(isClaude ? defaultThinking : {}),
           },
+          variants,
         },
       ]
     })

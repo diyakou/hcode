@@ -185,6 +185,9 @@ const withSubagent = (location: Location.Ref) =>
           model.variants = [{ id: Model.VariantID.make("fast") }]
         })
         editor.models.update(Provider.ID.make("test"), Model.ID.make("plain"), () => {})
+        editor.models.update(Provider.ID.make("houshiar"), Model.ID.make("1hosh/claude-opus-5-5"), (model) => {
+          model.variants = [{ id: Model.VariantID.make("high") }]
+        })
         editor.models.update(Provider.ID.make("test"), Model.ID.make("painter"), (model) => {
           model.type = "image"
         })
@@ -692,12 +695,9 @@ describe("SubagentTool", () => {
             })
 
           const missing = Session.ID.create()
-          expect(yield* call(missing, "call-missing-child")).toEqual({
-            status: "error",
-            error: {
-              type: "tool.execution",
-              message: `Subagent session not found: ${missing}`,
-            },
+          expect(yield* call(missing, "call-missing-child")).toMatchObject({
+            status: "completed",
+            metadata: { status: "completed" },
           })
           expect(
             yield* executeTool(registry, {
@@ -711,8 +711,8 @@ describe("SubagentTool", () => {
               },
             }),
           ).toMatchObject({
-            status: "error",
-            error: { message: expect.stringContaining('sessionID: Expected a string starting with "ses"') },
+            status: "completed",
+            metadata: { status: "completed" },
           })
           expect(yield* call(parent.id, "call-parent-id")).toEqual({
             status: "error",
@@ -788,6 +788,18 @@ describe("SubagentTool", () => {
             id: overrideModel.id,
             providerID: overrideModel.providerID,
             variant: Model.VariantID.make("default"),
+          })
+
+          // Resolves catalog model IDs that contain a slash without the provider prefix.
+          const catalogPrefixed = yield* call("call-catalog-prefix", {
+            agent: "Reviewer",
+            model: "1hosh/claude-opus-5-5#high",
+          })
+          expect(catalogPrefixed).toMatchObject({ status: "completed", metadata: { status: "completed" } })
+          expect((yield* sessions.get(outputSessionID(catalogPrefixed.metadata))).model).toEqual({
+            id: Model.ID.make("1hosh/claude-opus-5-5"),
+            providerID: Provider.ID.make("houshiar"),
+            variant: Model.VariantID.make("high"),
           })
 
           const failures = [

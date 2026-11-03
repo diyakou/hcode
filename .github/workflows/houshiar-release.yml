@@ -9,7 +9,7 @@ on:
       tag:
         description: Existing version tag to build
         required: true
-        default: v2.2.6
+        default: v2.2.7
         type: string
 
 env:
@@ -41,6 +41,14 @@ jobs:
             cli: linux-x64-baseline
             runner: ubuntu-24.04
             executable: opencode
+          - target: darwin-arm64
+            cli: darwin-arm64
+            runner: macos-14
+            executable: opencode
+          - target: darwin-x64
+            cli: darwin-x64-baseline
+            runner: macos-13
+            executable: opencode
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
@@ -71,7 +79,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends rpm
       - name: Build bundled CLI
         working-directory: packages/cli
-        run: bun run build --single --baseline --skip-install
+        run: |
+          if [[ "${{ runner.os }}" == "macOS" && "${{ matrix.target }}" == "darwin-arm64" ]]; then
+            bun run build --single --skip-install
+          else
+            bun run build --single --baseline --skip-install
+          fi
         env:
           OPENCODE_TARGET: ${{ matrix.cli }}
       - name: Verify CLI version and archive
@@ -106,6 +119,21 @@ jobs:
           for file in dist/desktop/*; do
             cp "$file" "release/houshiar-${RELEASE_VERSION}-linux-x64.${file##*.}"
           done
+      - name: Collect macOS packages
+        if: runner.os == 'macOS'
+        run: |
+          app_bundle=$(find packages/desktop/dist -name "*.app" -type d -maxdepth 2 | head -n 1)
+          if [ -n "$app_bundle" ]; then
+            hdiutil create -volname "Houshiar" -srcfolder "$app_bundle" -ov "release/houshiar-${RELEASE_VERSION}-${{ matrix.target }}.dmg"
+            ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "release/houshiar-${RELEASE_VERSION}-${{ matrix.target }}.zip"
+          fi
+          if [ -d dist/desktop ]; then
+            for file in dist/desktop/*.tar; do
+              if [ -f "$file" ]; then
+                cp "$file" "release/houshiar-${RELEASE_VERSION}-${{ matrix.target }}.app.tar"
+              fi
+            done
+          fi
       - name: Upload release artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

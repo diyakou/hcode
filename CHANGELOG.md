@@ -2,6 +2,15 @@
 
 Release notes for OpenCode V2, newest first.
 
+## v2.2.7 — 2026-11-03
+
+### Houshiar & Subagents
+
+- Add automatic recovery and alias repairs for Subagent tool execution, enabling parallel agents.
+- Enable Adaptive Thinking with High Effort by default for Claude models on the Houshiar gateway.
+- Add full reasoning effort variants (high, max, low) for Houshiar Claude models.
+- Support macOS (Apple Silicon & Intel DMG/ZIP) and Ubuntu (.deb) desktop builds in the Houshiar release workflow.
+
 ## v2.2.6 — 2026-10-31
 
 ### Houshiar

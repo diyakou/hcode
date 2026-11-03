@@ -39,7 +39,8 @@ export const Input = Schema.Struct({
       'NEVER set this unless the user explicitly asks for a particular model or variant. It must be a chat model; image and decision models can\'t run subagents. The value is written as "providerID/modelID", or "providerID/modelID#variant" to include a variant. Do not guess the ID: look the model up with the models tool, filtering to your own provider first.',
   }),
   sessionID: Schema.optionalKey(SessionSchema.ID).annotate({
-    description: "Send a follow-up to an existing subagent, running or finished. Omit to start a new one.",
+    description:
+      "Send a follow-up to an existing subagent, running or finished. Omit this parameter to start a new subagent session; never pass a placeholder or guessed ID.",
   }),
   background: Schema.optionalKey(Schema.Boolean).annotate({
     description:
@@ -54,6 +55,7 @@ export const Output = Schema.Struct({
 })
 export const description = [
   "Spawns an agent in a child session to work on the specified task.",
+  "You can invoke multiple subagents in parallel in a single turn to divide research or execution across independent subtasks for faster and more thorough results.",
   "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent.",
   "New child sessions start with fresh context, so include all relevant context and instructions when you don't pass a sessionID.",
   "Foreground (default) runs the subagent to completion and returns its final response.",
@@ -80,13 +82,15 @@ export const Plugin = {
             message: `Invalid model "${input}". Use "providerID/modelID" or "providerID/modelID#variant".`,
           }),
       })
-      const model = (yield* models.available()).find(
-        (model) => model.providerID === ref.providerID && model.id === ref.id,
-      )
+      const available = yield* models.available()
+      const model =
+        available.find((model) => model.providerID === ref.providerID && model.id === ref.id) ??
+        available.find((model) => model.id === input.split("#")[0])
       if (model === undefined) {
-        const other = (yield* models.available(["image", "decision"])).find(
-          (model) => model.providerID === ref.providerID && model.id === ref.id,
-        )
+        const otherAvailable = yield* models.available(["image", "decision"])
+        const other =
+          otherAvailable.find((model) => model.providerID === ref.providerID && model.id === ref.id) ??
+          otherAvailable.find((model) => model.id === input.split("#")[0])
         return yield* new ToolFailure({
           message: other
             ? `Model "${ref.providerID}/${ref.id}" is ${other.type === "image" ? "an image" : "a decision"} model; subagents need a chat model. Use the models tool to find one.`
@@ -100,7 +104,11 @@ export const Plugin = {
               ? `Model "${ref.providerID}/${ref.id}" has no variants. Omit the variant.`
               : `Variant "${ref.variant}" is not available for "${ref.providerID}/${ref.id}". Available: ${model.variants.map((variant) => variant.id).join(", ")}.`,
         })
-      return ref
+      return Model.Ref.make({
+        providerID: model.providerID,
+        id: model.id,
+        ...(ref.variant === undefined ? {} : { variant: ref.variant }),
+      })
     })
 
     yield* ctx.tool
@@ -137,7 +145,8 @@ export const Plugin = {
                 return yield* new ToolFailure({
                   message: `Subagent depth limit reached (${limit}). Increase "experimental.subagent_depth" to allow nested subagents.`,
                 })
-              const agent = yield* agents.resolve(input.agent)
+              const agent =
+                (yield* agents.resolve(input.agent)) ?? (yield* agents.resolve(input.agent.trim().toLowerCase()))
               if (agent === undefined) return yield* new ToolFailure({ message: `Unknown agent: ${input.agent}` })
               if (agent.mode === "primary")
                 return yield* new ToolFailure({ message: `Agent ${input.agent} cannot run as a subagent` })
@@ -159,14 +168,7 @@ export const Plugin = {
               const existing =
                 input.sessionID === undefined
                   ? undefined
-                  : yield* sessions
-                      .get(input.sessionID)
-                      .pipe(
-                        Effect.mapError(
-                          (error) =>
-                            new ToolFailure({ message: `Subagent session not found: ${input.sessionID}`, error }),
-                        ),
-                      )
+                  : yield* sessions.get(input.sessionID).pipe(Effect.orElseSucceed(() => undefined))
               if (existing !== undefined && existing.parentID !== context.sessionID)
                 return yield* new ToolFailure({
                   message: `Session ${existing.id} is not a child of the current session`,
@@ -277,11 +279,26 @@ export const Plugin = {
     yield* ctx.tool.hook("execute.before", (event) =>
       Effect.sync(() => {
         if (event.tool !== name || !Predicate.isObject(event.input)) return
-        if (event.input.model !== "" && event.input.sessionID !== "") return
-        const input = { ...event.input }
-        if (input.model === "") delete input.model
-        if (input.sessionID === "") delete input.sessionID
-        event.input = input
+        const raw: Record<string, unknown> = { ...event.input }
+        if (typeof raw.agent !== "string" && typeof raw.subagent_type === "string") {
+          raw.agent = raw.subagent_type
+          delete raw.subagent_type
+        }
+        if (typeof raw.background !== "boolean" && typeof raw.run_in_background === "boolean") {
+          raw.background = raw.run_in_background
+          delete raw.run_in_background
+        }
+        if (typeof raw.sessionID !== "string" && typeof raw.resume === "string") {
+          raw.sessionID = raw.resume
+          delete raw.resume
+        }
+        if (typeof raw.model === "string" && raw.model.trim() === "") delete raw.model
+        if (
+          typeof raw.sessionID === "string" &&
+          (raw.sessionID.trim() === "" || !/^ses_[a-zA-Z0-9_-]{8,}$/.test(raw.sessionID))
+        )
+          delete raw.sessionID
+        event.input = raw
       }),
     )
 
