@@ -122,7 +122,7 @@ jobs:
       - name: Collect macOS packages
         if: runner.os == 'macOS'
         run: |
-          app_bundle=$(find packages/desktop/dist -name "*.app" -type d -maxdepth 2 | head -n 1)
+          app_bundle=$(find packages/desktop/dist -name "*.app" -type d | head -n 1)
           if [ -n "$app_bundle" ]; then
             hdiutil create -volname "Houshiar" -srcfolder "$app_bundle" -ov "release/houshiar-${RELEASE_VERSION}-${{ matrix.target }}.dmg"
             ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "release/houshiar-${RELEASE_VERSION}-${{ matrix.target }}.zip"

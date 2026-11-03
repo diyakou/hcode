@@ -46,7 +46,8 @@ if (!app && os === "linux") {
 }
 
 if (!app && os === "mac") {
-  await $`bunx electron-builder ${flags} --dir -c.mac.identity=null`
+  await rm("resources/icons/icon.icon", { recursive: true, force: true })
+  await $`bunx electron-builder ${flags} --dir -c.mac.identity=null -c.mac.icon=resources/icons/icon.icns`
   const parent = path.join("dist", cli.cpu === "arm64" ? "mac-arm64" : "mac")
   const bundles = (await readdir(parent)).filter((file) => file.endsWith(".app"))
 
