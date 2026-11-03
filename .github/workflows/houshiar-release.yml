@@ -45,10 +45,12 @@ jobs:
             cli: darwin-arm64
             runner: macos-14
             executable: opencode
+            install: --os=darwin --cpu=arm64
           - target: darwin-x64
             cli: darwin-x64-baseline
             runner: macos-14
             executable: opencode
+            install: --os=darwin --cpu=*
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
@@ -71,6 +73,8 @@ jobs:
           echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
       - name: Set up Bun and dependencies
         uses: ./.github/actions/setup-bun
+        with:
+          install-flags: ${{ matrix.install }}
       - name: Test Houshiar gateway and saved-key activation
         working-directory: packages/core
         run: bun run script/test.ts test/houshiar.test.ts test/plugin/provider-houshiar.test.ts
@@ -80,7 +84,9 @@ jobs:
       - name: Build bundled CLI
         working-directory: packages/cli
         run: |
-          if [[ "${{ runner.os }}" == "macOS" && "${{ matrix.target }}" == "darwin-arm64" ]]; then
+          if [[ "${{ matrix.target }}" == "darwin-x64" ]]; then
+            bun run build
+          elif [[ "${{ matrix.target }}" == "darwin-arm64" ]]; then
             bun run build --single --skip-install
           else
             bun run build --single --baseline --skip-install
