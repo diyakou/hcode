@@ -30,7 +30,7 @@ env:
 jobs:
   affected:
     name: affected packages
-    if: ${{ !github.event.pull_request.draft }}
+    if: github.repository == 'anomalyco/opencode' && !github.event.pull_request.draft
     runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       e2e: ${{ steps.packages.outputs.app }}
