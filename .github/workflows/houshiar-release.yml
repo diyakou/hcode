@@ -9,7 +9,7 @@ on:
       tag:
         description: Existing version tag to build
         required: true
-        default: v2.2.7
+        default: v2.2.9
         type: string
 
 env:
@@ -112,7 +112,7 @@ jobs:
         run: bun run pack
         env:
           OPENCODE_TARGET: ${{ matrix.target }}
-      - name: Build Windows installer from unsigned application
+      - name: Build unsigned Windows installer
         if: runner.os == 'Windows'
         run: |
           cp -a dist/desktop/app "$RUNNER_TEMP/houshiar-app"
@@ -127,21 +127,18 @@ jobs:
           for file in dist/desktop/*; do
             cp "$file" "release/houshiar-${RELEASE_VERSION}-linux-x64.${file##*.}"
           done
-      - name: Collect macOS packages
+      - name: Ad-hoc sign and package macOS application
         if: runner.os == 'macOS'
+        env:
+          # No Developer ID or notarization: see the prominent warning in README.md.
+          OPENCODE_DRY_RUN: "true"
         run: |
-          app_bundle=$(find packages/desktop/dist -name "*.app" -type d | head -n 1)
-          if [ -n "$app_bundle" ]; then
-            hdiutil create -volname "Houshiar" -srcfolder "$app_bundle" -ov "release/houshiar-${RELEASE_VERSION}-${{ matrix.target }}.dmg"
-            ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "release/houshiar-${RELEASE_VERSION}-${{ matrix.target }}.zip"
-          fi
-          if [ -d dist/desktop ]; then
-            for file in dist/desktop/*.tar; do
-              if [ -f "$file" ]; then
-                cp "$file" "release/houshiar-${RELEASE_VERSION}-${{ matrix.target }}.app.tar"
-              fi
-            done
-          fi
+          bash .github/release/sign-desktop-macos.sh "$RUNNER_TEMP/signed" dist/desktop/opencode-desktop-mac-*.app.tar
+          for file in "$RUNNER_TEMP"/signed/*; do
+            suffix="${file##*.}"
+            if [[ "$file" == *.app.tar.gz ]]; then suffix=app.tar.gz; fi
+            cp "$file" "release/houshiar-${RELEASE_VERSION}-${{ matrix.target }}.$suffix"
+          done
       - name: Upload release artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

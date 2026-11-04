@@ -1,114 +1,128 @@
-<p align="center">
-  <a href="https://opencode.ai">
-    <picture>
-      <source srcset="packages/console/app/src/asset/logo-ornate-dark.svg" media="(prefers-color-scheme: dark)">
-      <source srcset="packages/console/app/src/asset/logo-ornate-light.svg" media="(prefers-color-scheme: light)">
-      <img src="packages/console/app/src/asset/logo-ornate-light.svg" alt="OpenCode logo">
-    </picture>
-  </a>
-</p>
-<p align="center">The open source AI coding agent.</p>
-<p align="center">
-  <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/@opencode/cli"><img alt="npm" src="https://img.shields.io/npm/v/@opencode/cli?style=flat-square" /></a>
-  <a href="https://github.com/anomalyco/opencode/actions/workflows/release.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/opencode/release.yml?style=flat-square&branch=dev" /></a>
-</p>
+<div dir="rtl">
 
-<p align="center">
-  <a href="README.md">English</a> |
-  <a href="README.zh.md">简体中文</a> |
-  <a href="README.zht.md">繁體中文</a> |
-  <a href="README.ko.md">한국어</a> |
-  <a href="README.de.md">Deutsch</a> |
-  <a href="README.es.md">Español</a> |
-  <a href="README.fr.md">Français</a> |
-  <a href="README.it.md">Italiano</a> |
-  <a href="README.da.md">Dansk</a> |
-  <a href="README.ja.md">日本語</a> |
-  <a href="README.pl.md">Polski</a> |
-  <a href="README.ru.md">Русский</a> |
-  <a href="README.bs.md">Bosanski</a> |
-  <a href="README.ar.md">العربية</a> |
-  <a href="README.no.md">Norsk</a> |
-  <a href="README.br.md">Português (Brasil)</a> |
-  <a href="README.th.md">ไทย</a> |
-  <a href="README.tr.md">Türkçe</a> |
-  <a href="README.uk.md">Українська</a> |
-  <a href="README.bn.md">বাংলা</a> |
-  <a href="README.gr.md">Ελληνικά</a> |
-  <a href="README.vi.md">Tiếng Việt</a>
-</p>
+# هوشیار — دستیار برنامه‌نویسی با هوش مصنوعی
 
-[![OpenCode Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://opencode.ai)
+**توجه: نسخه‌های فعلی برنامه به‌دلیل محدودیت‌های ناشی از تحریم و هزینهٔ اضافی گواهی، امضای دیجیتال معتبر انتشار ندارند؛ نسخهٔ مک نیز تأیید انتشار اپل را دریافت نکرده است. بنابراین هنگام نصب یا اجرا ممکن است مک پیام «برنامه آسیب دیده است» و ویندوز هشدار ناشر ناشناس یا SmartScreen نمایش دهد. توضیحات کامل در بخش «چرا برنامه امضای معتبر ندارد و هشدار امنیتی نشان می‌دهد؟» آمده است.**
 
----
+هوشیار نسخه‌ای مستقل و متن‌باز بر پایهٔ [OpenCode](https://github.com/anomalyco/opencode) است که برای استفاده از درگاه هوشیار توسعه داده می‌شود. این پروژه محصول رسمی تیم OpenCode نیست و وابستگی سازمانی به آن ندارد.
 
-### Installation
+هوشیار محیط ترمینال و برنامهٔ دسکتاپ را برای بررسی کد، برنامه‌ریزی و انجام کارهای توسعه در اختیار شما می‌گذارد.
+
+## دریافت و نصب
+
+فایل‌های هوشیار را از [صفحهٔ انتشارهای همین مخزن](https://github.com/diyakou/hcode/releases) دریافت کنید. بسته‌های موجود در هر انتشار ممکن است متفاوت باشند.
+
+| سیستم‌عامل | فایل مناسب |
+| --- | --- |
+| مک با تراشهٔ اپل | فایل با پسوند `darwin-arm64.dmg` یا `darwin-arm64.zip` |
+| مک با پردازندهٔ اینتل | فایل با پسوند `darwin-x64.dmg` یا `darwin-x64.zip` |
+| ویندوز ۶۴ بیتی | فایل با پسوند `windows-x64.exe` |
+| لینوکس ۶۴ بیتی | بستهٔ `.deb`، `.rpm` یا `.AppImage` |
+| ابزار خط فرمان | بایگانی با پسوند `cli.tar.gz` متناسب با سیستم‌عامل |
+
+در مک، برنامه را از تصویر دیسک به پوشهٔ برنامه‌ها منتقل کنید. در ویندوز، فایل نصب را اجرا کنید. در لینوکس، بستهٔ متناسب با توزیع خود را نصب کنید یا از فایل AppImage استفاده کنید.
+
+نسخهٔ دسکتاپ ابزار خط فرمان مورد نیاز خود را همراه دارد؛ نصب جداگانهٔ OpenCode پیش‌نیاز اجرای آن نیست. دستورهای نصب و بسته‌های موجود در وب‌سایت OpenCode مربوط به پروژهٔ اصلی‌اند و الزاماً نسخهٔ هوشیار را نصب نمی‌کنند.
+
+## چرا برنامه امضای معتبر ندارد و هشدار امنیتی نشان می‌دهد؟
+
+**نسخه‌های فعلی هوشیار امضای دیجیتال معتبر برای انتشار عمومی ندارند؛ نسخهٔ مک نیز تأیید انتشار اپل را دریافت نکرده است.** محدودیت‌های ناشی از تحریم، دشواری دسترسی و احراز هویت در سرویس‌های امضا و هزینهٔ اضافی دریافت و نگهداری گواهی باعث شده‌اند فعلاً این امکان را فراهم نکنیم. این محدودیت را پنهان نمی‌کنیم و ادعا نمی‌کنیم برنامه از سوی اپل یا مایکروسافت تأیید شده است.
+
+به همین دلیل ممکن است هنگام نصب یا اجرا با این پیام‌ها روبه‌رو شوید:
+
+- در مک: ناشناس بودن توسعه‌دهنده، بررسی نشدن برنامه توسط اپل، یا پیامی با مضمون «برنامه آسیب دیده و قابل باز شدن نیست».
+- در ویندوز: ناشناس بودن ناشر یا هشدار محافظت از رایانه توسط SmartScreen.
+
+نبود امضای معتبر می‌تواند علت این هشدارها باشد، اما **هر خطایی را نمی‌توان به امضا نسبت داد**. پیام آسیب‌دیدگی ممکن است به خرابی دانلود یا مشکل واقعی بسته هم مربوط باشد. نبود امضا همچنین به معنی تضمین سالم یا امن بودن فایل نیست.
+
+فایل را فقط از انتشارهای همین مخزن بگیرید. اگر انتشار شامل `SHA256SUMS.txt` است، مقدار درهم‌سازی فایل دانلودشده را با آن مقایسه کنید تا تغییر یا خرابی فایل نسبت به نسخهٔ منتشرشده مشخص شود. این بررسی جای امضای معتبر و تأیید هویت ناشر را نمی‌گیرد.
+
+ما خاموش کردن سراسری قابلیت‌های امنیتی سیستم‌عامل را توصیه نمی‌کنیم. اگر به منبع فایل اعتماد ندارید یا نصب برنامهٔ بدون امضا با سیاست دستگاه شما سازگار نیست، آن را اجرا نکنید. در صورت گزارش مشکل، نسخهٔ برنامه، سیستم‌عامل، معماری پردازنده و متن کامل خطا را در [بخش مشکلات پروژه](https://github.com/diyakou/hcode/issues) بنویسید؛ کلید دسترسی و اطلاعات شخصی را ارسال نکنید.
+
+## امکانات هوشیار
+
+- دسترسی به مدل‌های درگاه هوشیار و دریافت فهرست مدل‌های موجود از درگاه.
+- پشتیبانی از قابلیت‌های استدلال مدل‌ها، متناسب با امکانات هر مدل.
+- نمایش مصرف و موجودی حساب با دستور `/usage`.
+- محیط ترمینال و برنامهٔ دسکتاپ برای کار با پروژه‌های کدنویسی.
+- استفاده از عامل‌های اصلی و عامل‌های کمکی برای تقسیم کارهای پیچیده.
+
+فهرست مدل‌ها از `https://wqai.morvism.ir/v1/models` و اطلاعات مصرف از مسیر `/v1/usage` همان درگاه دریافت می‌شود. برای استفاده از مدل‌های این درگاه به کلید دسترسی معتبر نیاز دارید؛ کلید خود را در مخزن، گزارش خطا یا تصویر صفحه منتشر نکنید.
+
+## عامل‌ها
+
+دو عامل اصلی با کلید `Tab` قابل انتخاب‌اند:
+
+- **`build`**: عامل پیش‌فرض برای انجام کارهای توسعه و تغییر کد، مطابق مجوزهای تنظیم‌شده.
+- **`plan`**: عامل بررسی و برنامه‌ریزی؛ به‌صورت پیش‌فرض اجازهٔ ویرایش فایل ندارد و برای اجرای فرمان‌های پوسته درخواست مجوز می‌کند.
+
+عامل کمکی **`general`** برای جست‌وجو و کارهای چندمرحله‌ای در دسترس است و می‌توان آن را با `@general` فراخواند.
+
+## استقلال نصب و محدودیت‌های فعلی
+
+هویت نصب دسکتاپ هوشیار با نام `Houshiar` و شناسهٔ `ir.houshiar.desktop` تعریف شده است؛ نسخه‌های توسعه و آزمایشی شناسه‌های جدا دارند. تنظیمات دسکتاپ و شناسهٔ نصب آن از OpenCode جدا شده‌اند و طرح پیوند اختصاصی برنامه `houshiar://` است.
+
+این جداسازی به معنی جداسازی کامل همهٔ داده‌ها نیست: ذخیره‌سازی و کشف سرویس در ابزار خط فرمان و سرور هنوز از پیاده‌سازی مشترک با OpenCode استفاده می‌کنند. داده‌ها و تنظیمات نصب قبلی نیز به‌صورت خودکار منتقل نمی‌شوند. این تغییرات تنها پس از ساخت و انتشار بستهٔ جدید در فایل‌های دانلودی اعمال می‌شوند.
+
+تا زمانی که پشتیبانی از به‌روزرسانی خودکار در انتشار مربوطه تأیید نشده، نسخهٔ جدید را از صفحهٔ انتشارها دریافت کنید.
+
+## اجرای پروژه از کد منبع
+
+برای توسعه، به گیت و نسخهٔ Bun مشخص‌شده در فیلد `packageManager` فایل `package.json` نیاز دارید. فرمان‌های زیر را در ترمینال اجرا کنید:
+
+</div>
 
 ```bash
-# YOLO
-curl -fsSL https://opencode.ai/v2/install | bash
-
-# Package managers
-npm i -g @opencode/cli@latest      # or bun/pnpm/yarn
-brew install anomalyco/tap/opencode-v2 # macOS and Linux (recommended, always up to date)
-brew install opencode              # macOS and Linux (official brew formula, updated less)
-sudo pacman -S opencode            # Arch Linux (Stable)
-paru -S opencode-beta              # Arch Linux (Latest from AUR)
-mise use -g opencode               # Any OS
-nix run github:anomalyco/opencode  # Nix
+git clone https://github.com/diyakou/hcode.git
+cd hcode
+bun install
 ```
 
-> [!TIP]
-> Remove versions older than 0.1.x before installing.
+<div dir="rtl">
 
-### Desktop App (BETA)
+برای اجرای محیط ترمینال از کد منبع:
 
-OpenCode is also available as a desktop application. Download it from [opencode.ai/download](https://opencode.ai/download).
-
-| Platform              | Download                           |
-| --------------------- | ---------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-mac-arm64.dmg`   |
-| macOS (Intel)         | `opencode-desktop-mac-x64.dmg`     |
-| Windows               | `opencode-desktop-win-x64.exe`     |
-| Linux                 | `.deb`, `.rpm`, or `.AppImage`     |
+</div>
 
 ```bash
-# macOS (Homebrew)
-brew install --cask opencode-desktop
+bun run dev
 ```
 
-#### Installation Directory
+<div dir="rtl">
 
-The install script installs OpenCode to `$HOME/.opencode/bin`.
+برای اجرای دسکتاپ در حالت توسعه:
 
-### Agents
+</div>
 
-OpenCode includes two built-in agents you can switch between with the `Tab` key.
+```bash
+bun run dev:desktop
+```
 
-- **build** - Default, full-access agent for development work
-- **plan** - Read-only agent for analysis and code exploration
-  - Denies file edits by default
-  - Asks permission before running bash commands
-  - Ideal for exploring unfamiliar codebases or planning changes
+<div dir="rtl">
 
-Also included is a **general** subagent for complex searches and multistep tasks.
-This is used internally and can be invoked using `@general` in messages.
+برای بررسی کامل قواعد کدنویسی و نوع‌ها، از ریشهٔ مخزن اجرا کنید:
 
-Learn more about [agents](https://opencode.ai/v2/docs/agents).
+</div>
 
-### Documentation
+```bash
+bun run check
+```
 
-For more info on how to configure OpenCode, [**head over to our docs**](https://opencode.ai/v2/docs).
+<div dir="rtl">
 
-### Contributing
+آزمون‌ها را از پوشهٔ بستهٔ مربوطه اجرا کنید؛ اجرای آزمون از ریشهٔ مخزن پشتیبانی نمی‌شود. دستورهای بررسی و توسعه را با توجه به راهنمای `AGENTS.md` همان بخش اجرا کنید.
 
-If you're interested in contributing to OpenCode, please read our [contributing docs](./CONTRIBUTING.md) before submitting a pull request.
+## مستندات و مشارکت
 
-### Building on OpenCode
+- [یادداشت‌ها و شرایط انتشار هوشیار](./HOUSHIAR_RELEASE.md)
+- [راهنمای مشارکت](./CONTRIBUTING.md)
+- [ثبت مشکل یا پیشنهاد](https://github.com/diyakou/hcode/issues)
+- [مستندات پایهٔ OpenCode](https://opencode.ai/v2/docs)؛ برخی جزئیات ممکن است با هوشیار متفاوت باشند.
 
-If you are working on a project that's related to OpenCode and is using "opencode" as part of its name, for example "opencode-dashboard" or "opencode-mobile", please add a note to your README to clarify that it is not built by the OpenCode team and is not affiliated with us in any way.
+پیش از ارسال تغییر، راهنمای مشارکت و دستورهای مخزن را بخوانید. برای مشکلات نصب، نام دقیق فایل دانلودشده و معماری دستگاه را هم ذکر کنید.
 
----
+## مجوز و قدردانی
 
-**Join our community** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+این پروژه بر پایهٔ کار متن‌باز تیم و مشارکت‌کنندگان OpenCode ساخته شده است. نام‌ها و نشان‌های OpenCode متعلق به صاحبان خود هستند. شرایط استفاده و بازتوزیع کد در [فایل مجوز](./LICENSE) آمده است.
+
+</div>

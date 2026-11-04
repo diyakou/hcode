@@ -53,7 +53,9 @@ const runtime = Layer.effect(
       win.focus()
     }
 
-    const emitDeepLinks = (urls: string[]) => {
+    const emitDeepLinks = (values: string[]) => {
+      // The shared renderer uses the upstream URL format; only Houshiar owns the OS scheme.
+      const urls = values.map((url) => url.replace(/^houshiar:/, "opencode:"))
       if (!urls.length) return
       pendingDeepLinks.push(...urls)
 
@@ -86,7 +88,7 @@ const runtime = Layer.effect(
     }
 
     const secondInstance = (_event: Event, argv: string[]) => {
-      const urls = argv.filter((arg) => arg.startsWith("opencode://"))
+      const urls = argv.filter((arg) => arg.startsWith("houshiar://"))
 
       if (urls.length) {
         runFork(Effect.logInfo("deep link received via second-instance", { urls }))

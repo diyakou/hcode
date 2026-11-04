@@ -20,6 +20,11 @@ if ! dry_run; then
   timestamp=--timestamp
 fi
 sign() {
+  # Ad-hoc builds have no Developer ID team for hardened-runtime library validation.
+  if dry_run; then
+    codesign --force "$timestamp" --entitlements "$2" --sign "$identity" "$1"
+    return
+  fi
   codesign --force "$timestamp" --options runtime --entitlements "$2" --sign "$identity" "$1"
 }
 bundle() {
