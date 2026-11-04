@@ -30,7 +30,7 @@ export type ComposerAttachmentConfig = {
   readClipboardImage?: () => Promise<File | null>
   getPathForFile?: (file: File) => string
   onDragCancel?: (callback: () => void) => () => void
-  store?: (file: File) => Promise<{ id: string; url: string }>
+  store?: (blob: Blob) => Promise<{ id: string; url: string }>
 }
 
 export function createComposerAttachments(
@@ -76,7 +76,10 @@ export function createComposerAttachments(
   }
 
   const addInline = async (file: File, mime: string, target: NonNullable<ReturnType<typeof capture>>, clipboard: boolean) => {
-    const blob = input.store ? await input.store(file) : await createBlobReference(file)
+    // File handles from a picker or drop can lose access before submission on macOS.
+    // Keep owned bytes for both the preview and the eventual prompt.
+    const data = new Blob([await file.arrayBuffer()], { type: mime })
+    const blob = input.store ? await input.store(data) : await createBlobReference(data)
     const sourcePath = input.getPathForFile?.(file) || undefined
 
     // Native clipboard images arrive with a fresh timestamped filename on every paste, so identical
