@@ -1,5 +1,6 @@
 # هوشیار ۲.۲.۱۲
 
+- The built-in browser skill now guides frontend implementation through screenshots, real interactions, console/network inspection and source fixes followed by verification.
 - Automatic compaction now uses the smaller of the model window and the account's plan context limit, including after model switches.
 - Reply token limits also respect the account's plan limits.
 - Structured gateway context-limit errors and Persian plan-context messages trigger compaction recovery without deleting the original chat history.

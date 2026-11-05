@@ -36,6 +36,12 @@ performance and memory, and recovery after failures. It lists every operation
 from `Browser.Operations`. Like the tools, it is hidden until a desktop browser
 attaches to the session.
 
+For frontend work, the skill directs the agent to use the project's development
+server, inspect both page snapshots and screenshots, exercise the affected user
+flow, review console and network errors, fix the workspace source and repeat the
+same checks. This is agent guidance using the existing desktop browser tools;
+it does not require a Chrome extension or create an additional autonomous loop.
+
 The plugin entrypoint only composes its two owners: `connection.ts` manages
 desktop attachments and pending RPC requests; `tools.ts` runs the tool workflow.
 Server-local file IO stays in `files.ts`. The public `rpc.ts` entrypoint remains
