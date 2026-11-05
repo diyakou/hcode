@@ -16,6 +16,11 @@ import {
   ProjectAvatar,
 } from "@opencode/ui/project-avatar"
 import { Schema } from "effect"
+import { Houshiar } from "@opencode/schema/houshiar"
+import { Button } from "@opencode/ui/button"
+import { useServerSDK } from "@/runtime/server/client"
+import { useData } from "@/runtime/server/current"
+import { formatServerError } from "@/runtime/server/errors"
 import { createPresence } from "@/runtime/presence"
 import { Composer } from "@/composer/composer"
 import { ComposerDropzone } from "@/composer/dropzone"
@@ -173,13 +178,30 @@ function NewSessionTips(props: { selection: ComposerModel["model"]["selection"];
   const dialog = useDialog()
   const sdk = useWorkspaceLocation()
   const providers = useProviders(() => sdk().directory)
+  const serverSDK = useServerSDK()
+  const data = useData()
+  const [refresh, setRefresh] = createStore({ loading: false, error: "" })
+  const reload = async () => {
+    setRefresh({ loading: true, error: "" })
+    await serverSDK.api
+      .rpc(Houshiar.Definition)
+      .refresh({}, { location: { directory: sdk().directory } })
+      .then(() =>
+        Promise.all([
+          data.location.provider.sync({ directory: sdk().directory }),
+          data.location.model.sync({ directory: sdk().directory }),
+        ]),
+      )
+      .catch((error) => setRefresh("error", formatServerError(error, language.t)))
+    setRefresh("loading", false)
+  }
   let prompted = false
   createEffect(() => {
     if (prompted || providers.anyConnection() !== false) return
     prompted = true
     void import("@/providers/connect/dialog").then(({ DialogConnectProvider }) => {
       void dialog.show(() => (
-        <DialogConnectProvider directory={sdk().directory} selection={props.selection} onDone={props.onDone} />
+        <DialogConnectProvider welcome directory={sdk().directory} selection={props.selection} onDone={props.onDone} />
       ))
     })
   })
@@ -206,8 +228,6 @@ function NewSessionTips(props: { selection: ComposerModel["model"]["selection"];
   })
 
   const open = () => {
-    if (!tip()) return
-
     void import("@/providers/connect/dialog").then(({ DialogConnectProvider }) => {
       void dialog.show(() => (
         <DialogConnectProvider directory={sdk().directory} selection={props.selection} onDone={props.onDone} />
@@ -222,43 +242,60 @@ function NewSessionTips(props: { selection: ComposerModel["model"]["selection"];
   }
 
   return (
-    <Show when={presence.present()}>
-      <div class="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-10">
-        <div
-          ref={setRef}
-          data-component="new-session-tip"
-          data-visible={tip()}
-          class="group/new-session-tip pointer-events-auto relative flex h-6 max-w-full items-center transition-[opacity,transform] duration-[250ms] ease-[cubic-bezier(0.215,0.61,0.355,1)] motion-reduce:transition-none"
-          classList={{ "data-[visible=false]:animate-out fade-out slide-out-to-bottom-4": true }}
-        >
-          <button
-            type="button"
-            class="flex h-6 min-w-0 items-center rounded-[4px] pl-1.5 text-[13px] leading-text-compact tracking-[-0.04px] text-v2-text-text-faint transition-[background-color,color] duration-150 ease-in-out hover:bg-v2-overlay-simple-overlay-hover hover:text-v2-text-text-muted focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:text-v2-text-text-muted focus-visible:outline-none"
-            onClick={open}
-          >
-            <span class="truncate">{language.t("home.providerTip")}</span>
-            <span class="flex size-6 shrink-0 items-center justify-center" aria-hidden="true">
-              <Icon name="chevron-down" size="small" class="-rotate-90" />
-            </span>
-          </button>
-          <Tooltip
-            class="hover-reveal absolute left-full top-0 flex h-6 w-7 items-center justify-end delay-0 duration-0 group-hover/new-session-tip:delay-[250ms] group-hover/new-session-tip:duration-150 group-hover/new-session-tip:opacity-100 focus-within:delay-0 focus-within:duration-0 focus-within:opacity-100"
-            placement="top"
-            openDelay={800}
-            value={language.t("common.dismiss")}
+    <>
+      <div class="absolute inset-x-0 bottom-14 flex flex-col items-center gap-2 px-6">
+        <div class="flex items-center gap-2">
+          <Button variant="ghost" onClick={open}>
+            {language.t("command.provider.connect")}
+          </Button>
+          <Button variant="ghost" disabled={refresh.loading} aria-busy={refresh.loading} onClick={() => void reload()}>
+            {language.t("houshiar.models.refresh")}
+          </Button>
+        </div>
+        <Show when={refresh.error}>
+          <p role="alert" class="text-13 text-v2-text-text-muted">
+            {refresh.error}
+          </p>
+        </Show>
+      </div>
+      <Show when={presence.present()}>
+        <div class="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-10">
+          <div
+            ref={setRef}
+            data-component="new-session-tip"
+            data-visible={tip()}
+            class="group/new-session-tip pointer-events-auto relative flex h-6 max-w-full items-center transition-[opacity,transform] duration-[250ms] ease-[cubic-bezier(0.215,0.61,0.355,1)] motion-reduce:transition-none"
+            classList={{ "data-[visible=false]:animate-out fade-out slide-out-to-bottom-4": true }}
           >
             <button
               type="button"
-              class="flex size-6 items-center justify-center rounded-[4px] text-v2-icon-icon-muted transition-[background-color,color] duration-150 ease-in-out hover:bg-v2-overlay-simple-overlay-hover hover:text-v2-icon-icon-base focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:text-v2-icon-icon-base focus-visible:outline-none"
-              aria-label={language.t("common.dismiss")}
-              onClick={dismiss}
+              class="flex h-6 min-w-0 items-center rounded-[4px] pl-1.5 text-[13px] leading-text-compact tracking-[-0.04px] text-v2-text-text-faint transition-[background-color,color] duration-150 ease-in-out hover:bg-v2-overlay-simple-overlay-hover hover:text-v2-text-text-muted focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:text-v2-text-text-muted focus-visible:outline-none"
+              onClick={open}
             >
-              <Icon name="xmark-small" />
+              <span class="truncate">{language.t("home.providerTip")}</span>
+              <span class="flex size-6 shrink-0 items-center justify-center" aria-hidden="true">
+                <Icon name="chevron-down" size="small" class="-rotate-90" />
+              </span>
             </button>
-          </Tooltip>
+            <Tooltip
+              class="hover-reveal absolute left-full top-0 flex h-6 w-7 items-center justify-end delay-0 duration-0 group-hover/new-session-tip:delay-[250ms] group-hover/new-session-tip:duration-150 group-hover/new-session-tip:opacity-100 focus-within:delay-0 focus-within:duration-0 focus-within:opacity-100"
+              placement="top"
+              openDelay={800}
+              value={language.t("common.dismiss")}
+            >
+              <button
+                type="button"
+                class="flex size-6 items-center justify-center rounded-[4px] text-v2-icon-icon-muted transition-[background-color,color] duration-150 ease-in-out hover:bg-v2-overlay-simple-overlay-hover hover:text-v2-icon-icon-base focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:text-v2-icon-icon-base focus-visible:outline-none"
+                aria-label={language.t("common.dismiss")}
+                onClick={dismiss}
+              >
+                <Icon name="xmark-small" />
+              </button>
+            </Tooltip>
+          </div>
         </div>
-      </div>
-    </Show>
+      </Show>
+    </>
   )
 }
 

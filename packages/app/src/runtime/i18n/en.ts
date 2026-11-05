@@ -1,6 +1,8 @@
 import { DESKTOP_NATIVE_ENGLISH } from "./desktop-native"
 
 export const dict = {
+  "houshiar.welcome.title": "Welcome to Houshiar",
+  "houshiar.models.refresh": "Reload models",
   "experiment.voiceCalls": "Voice calls",
   "voice.call": "Call",
   "voice.mute": "Mute",

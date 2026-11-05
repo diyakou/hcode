@@ -2,7 +2,7 @@ import { define } from "@opencode/plugin/effect/plugin"
 import { Houshiar } from "@opencode/schema/houshiar"
 import { Integration } from "@opencode/schema/integration"
 import type { Model } from "@opencode/schema/model"
-import { Effect } from "effect"
+import { Duration, Effect } from "effect"
 import { HttpClient, HttpClientError } from "effect/http"
 import { HoushiarGateway } from "../../houshiar.js"
 import { IntegrationConnection } from "../../integration/connection.js"
@@ -35,6 +35,7 @@ export const HoushiarPlugin = define({
     })
     const discovered = yield* ProviderRefresh.start({
       integrationID: Houshiar.id,
+      interval: Duration.seconds(30),
       // SAFETY: discovery starts empty and only publishes validated gateway models with their source connection.
       initial: { models: [] } as {
         readonly models: readonly Model.Info[]
@@ -91,6 +92,20 @@ export const HoushiarPlugin = define({
     })
     yield* ctx.rpc
       .register(Houshiar.Definition, {
+        refresh: (_, context) =>
+          discovered.refresh.pipe(
+            Effect.andThen(() =>
+              discovered.current.models.length > 0
+                ? Effect.succeed(true)
+                : Effect.fail(
+                    context.error(
+                      "unavailable",
+                      "Unable to load models. Check your API key and connection.",
+                      "models_unavailable",
+                    ),
+                  ),
+            ),
+          ),
         usage: (_, context) =>
           key().pipe(
             Effect.flatMap((access) => HoushiarGateway.usage(http, access.key)),

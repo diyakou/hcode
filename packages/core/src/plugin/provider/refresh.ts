@@ -36,7 +36,7 @@ export const start = Effect.fnUntraced(function* <A>(input: {
   readonly active: Effect.Effect<Connection>
   readonly load: (current: A, options: Options) => Effect.Effect<{ readonly connection: Connection; readonly value: A }>
   readonly reload: Effect.Effect<void>
-}): Effect.fn.Return<{ readonly current: A }, never, Bus.Service | Scope.Scope> {
+}): Effect.fn.Return<{ readonly current: A; readonly refresh: Effect.Effect<void> }, never, Bus.Service | Scope.Scope> {
   const bus = yield* Bus.Service
   const interval = input.interval ?? SharedCache.interval
   const lock = Semaphore.makeUnsafe(1)
@@ -66,5 +66,10 @@ export const start = Effect.fnUntraced(function* <A>(input: {
     Effect.forever,
     Effect.forkScoped,
   )
-  return state
+  return {
+    get current() {
+      return state.current
+    },
+    refresh: load({ force: true }).pipe(Effect.flatMap(apply)),
+  }
 })

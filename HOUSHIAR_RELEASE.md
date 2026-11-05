@@ -1,4 +1,8 @@
-# هوشیار ۲.۲.۱۰
+# هوشیار ۲.۲.۱۱
+
+- Added a welcome title to the initial API-key connection dialog.
+- Added persistent API connection and model reload buttons to the new-session screen.
+- Model discovery retries every 30 seconds; manual reload uses the saved key and bypasses the model cache.
 
 **این انتشار امضای معتبر ناشر ندارد. به‌دلیل محدودیت‌های ناشی از تحریم و هزینهٔ گواهی، نسخهٔ ویندوز بدون امضای معتبر و نسخهٔ مک با امضای محلی (ad-hoc)، بدون گواهی Developer ID و بدون notarization منتشر می‌شوند. ممکن است سیستم‌عامل هنگام نصب یا اجرا هشدار امنیتی نشان دهد.**
 

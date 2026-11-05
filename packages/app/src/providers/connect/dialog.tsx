@@ -80,6 +80,7 @@ export const DialogConnectProvider: Component<{
   controller?: ReturnType<typeof useProviderConnectController>
   /** Opened for one provider from another flow, with no way back to the provider list. */
   standalone?: boolean
+  welcome?: boolean
   selection?: ModelSelection
   onDone?: () => void
   onConnected?: (provider: string) => void
@@ -240,7 +241,7 @@ export const DialogConnectProvider: Component<{
                   provider={{ id: provider(), name: state.title }}
                   class="shrink-0 text-v2-icon-icon-base"
                 />
-                <DialogTitle>{state.title}</DialogTitle>
+                <DialogTitle>{props.welcome ? language.t("houshiar.welcome.title") : state.title}</DialogTitle>
               </div>
             )}
           </Match>

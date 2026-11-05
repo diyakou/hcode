@@ -10,6 +10,7 @@ The gateway base URL is `https://wqai.morvism.ir/v1` (defined in `packages/schem
 - `/usage` opens current account usage in the TUI and graphical app. The graphical app also has a usage button in provider settings.
 - Other model providers are removed after configuration and external provider plugins run. MCP sign-ins remain available.
 - Inventories refresh through the existing account-aware cache, including when the active API key changes. No model names are hardcoded.
+- Houshiar retries model discovery every 30 seconds. The new-session screen keeps API connection and model reload actions available; reload forces discovery with the saved key without entering it again.
 
 Use the Bun version pinned in `package.json` and install dependencies with `bun install --frozen-lockfile`.
 
