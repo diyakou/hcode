@@ -4,8 +4,43 @@ import { AIError, HttpContext } from "../src/schema/index.js"
 import { classifyProviderFailure, providerErrorMessage } from "../src/provider-error.js"
 
 describe("provider error classification", () => {
+  test("recovers gateway plan context rejections using their numeric limits", () => {
+    ;[32000, 31990].forEach((tokens) => {
+      const data = {
+        detail: {
+          error: { type: "invalid_request_error", message: "درخواست از سقف کانتکس پلن بیشتر است" },
+          input_tokens: tokens,
+          max_context_tokens: 32000,
+        },
+      }
+      const rawBody = JSON.stringify(data)
+      expect(providerErrorMessage(rawBody)).toBe(data.detail.error.message)
+      ;[{ rawBody }, { data }].forEach((payload) => {
+        expect(classifyProviderFailure({ message: "Bad Request", status: 400, ...payload })).toMatchObject({
+          _tag: "InvalidRequest",
+          classification: "context-overflow",
+        })
+      })
+    })
+    expect(
+      classifyProviderFailure({
+        message: "Bad Request",
+        status: 400,
+        data: { detail: { error: { type: "invalid_request_error" }, input_tokens: 100, max_context_tokens: 32000 } },
+      }),
+    ).not.toMatchObject({ classification: "context-overflow" })
+    expect(
+      classifyProviderFailure({
+        message: "Monthly credit limit",
+        status: 429,
+        data: { detail: { error: { type: "invalid_request_error" }, input_tokens: 40000, max_context_tokens: 32000 } },
+      }),
+    ).not.toMatchObject({ classification: "context-overflow" })
+  })
   test("classifies provider token limit messages as context overflow", () => {
     const messages = [
+      "درخواست شما شامل 231158 توکن است که از محدودیت پلن شما 200000 توکن بیشتر است",
+      "درخواست شما شامل 231,158 توکن است که از محدودیت پلن شما (200,000 توکن) بیشتر است. لطفاً تاریخچه مکالمه را کوتاه‌تر کنید یا پلن خود را ارتقا دهید.",
       "tokens in request more than max tokens allowed",
       "Requested token count exceeds the model's maximum context length of 131072 tokens.",
       "Requested input length 600010 exceeds maximum input length 131071",

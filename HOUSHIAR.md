@@ -7,6 +7,7 @@ The gateway base URL is `https://wqai.morvism.ir/v1` (defined in `packages/schem
 - `GET /v1/models` supplies the model picker. Full IDs, including prefixes such as `1hosh/`, are preserved.
 - Claude model IDs use the Anthropic-compatible `/v1/messages` protocol. Other IDs use OpenAI-compatible `/v1/chat/completions`.
 - `GET /v1/usage` validates the key and supplies account usage. This is the singular path registered by `E:\waiq\backend\app\routers\gateway.py`.
+- Its `limits.max_context_tokens` and `limits.max_output_tokens` cap the discovered models, so automatic compaction and reply sizing respect the account's plan after model switches. Structured gateway context-limit rejections also trigger the existing overflow compaction recovery.
 - `/usage` opens current account usage in the TUI and graphical app. The graphical app also has a usage button in provider settings.
 - Other model providers are removed after configuration and external provider plugins run. MCP sign-ins remain available.
 - Inventories refresh through the existing account-aware cache, including when the active API key changes. No model names are hardcoded.

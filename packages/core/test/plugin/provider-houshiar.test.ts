@@ -63,7 +63,13 @@ it.effect("keeps only Houshiar model access and API-key sign-in while preserving
           HttpClientResponse.fromWeb(
             request,
             Response.json(
-              request.url.endsWith("/usage") ? { authenticated: true, status: "active" } : { data: models },
+              request.url.endsWith("/usage")
+                ? {
+                    authenticated: true,
+                    status: "active",
+                    limits: { max_context_tokens: 32000, max_output_tokens: 4096 },
+                  }
+                : { data: models },
             ),
           ),
         )
@@ -88,6 +94,11 @@ it.effect("keeps only Houshiar model access and API-key sign-in while preserving
         yield* integrations.connection.key({ integrationID: Integration.ID.make(Houshiar.id), key: "saved-key" })
       yield* Fiber.join(ready)
       expect((yield* providers.available()).map((provider) => provider.id)).toEqual([Provider.ID.make(Houshiar.id)])
+      expect(
+        (yield* providers.snapshot()).records
+          .get(Provider.ID.make(Houshiar.id))
+          ?.models.get(Model.ID.make("1hosh/claude-sonnet"))?.limit,
+      ).toEqual({ context: 32000, output: 4096 })
       expect(
         Array.from((yield* providers.snapshot()).records.get(Provider.ID.make(Houshiar.id))!.models.keys()),
       ).toEqual([Model.ID.make("1hosh/claude-sonnet"), Model.ID.make("j-gpt/gpt-model")])

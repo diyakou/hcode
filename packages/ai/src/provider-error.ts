@@ -16,6 +16,8 @@ import { Json } from "./utils/json.js"
 import { isRecord } from "./utils/record.js"
 
 const patterns = [
+  // Houshiar may forward only its localized plan-context rejection.
+  /درخواست شما شامل [\d۰-۹٠-٩,٬]+ توکن است که از محدودیت پلن شما\s*\(?[\d۰-۹٠-٩,٬]+\s*(?:توکن)?\)?\s*بیشتر است/,
   /prompt is too long/i,
   /input is too long for (?:the )?(?:requested|selected) model/i,
   // OpenCode Go
@@ -208,6 +210,10 @@ const decodeMessage = Schema.decodeUnknownOption(
   Schema.fromJsonString(
     Schema.Union([
       messageAt({ error: Schema.Struct({ message: Message }) }, (body) => body.error.message),
+      messageAt(
+        { detail: Schema.Struct({ error: Schema.Struct({ message: Message }) }) },
+        (body) => body.detail.error.message,
+      ),
       messageAt({ error: Message }, (body) => body.error),
       messageAt({ message: Message }, (body) => body.message),
       // AWS services
@@ -266,7 +272,9 @@ export function classifyProviderFailure(input: ProviderFailure): AIError["reason
       codes.includes("request_too_large") ||
       // 429 bodies are throttles even when their wording matches an overflow phrase, e.g. Cerebras's
       // "too many tokens processed". Text matching stays on for 4xx and mid-stream errors without a status.
-      (input.status !== 429 && !codes.includes("throttlingexception") && isContextOverflow(text)))
+      (input.status !== 429 &&
+        !codes.includes("throttlingexception") &&
+        (isContextOverflow(text) || [input.data, body, input.message].some(gatewayContextOverflow))))
   )
     return new InvalidRequestError({ ...details, classification: "context-overflow" })
   if (input.status === 413 || isPayloadTooLarge(text))
@@ -317,6 +325,24 @@ export function classifyProviderFailure(input: ProviderFailure): AIError["reason
   // Any remaining 4xx is a deterministic rejection of this request.
   if (input.status !== undefined && input.status >= 400 && input.status < 500) return new InvalidRequestError(details)
   return new UnknownProviderError(details)
+}
+
+const decodeGatewayContext = Schema.decodeUnknownOption(
+  Schema.Struct({
+    detail: Schema.Struct({
+      error: Schema.Struct({ type: Schema.Literal("invalid_request_error") }),
+      input_tokens: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+      max_context_tokens: Schema.Int.check(Schema.isGreaterThan(0)),
+    }),
+  }),
+)
+
+// Houshiar uses the same rejection when fewer than 16 tokens remain for a reply.
+function gatewayContextOverflow(value: unknown) {
+  const decoded = Option.getOrUndefined(
+    decodeGatewayContext(typeof value === "string" ? Option.getOrUndefined(decodeJson(value)) : value),
+  )
+  return decoded !== undefined && decoded.detail.max_context_tokens - decoded.detail.input_tokens < 16
 }
 
 function providerCodes(value: unknown) {

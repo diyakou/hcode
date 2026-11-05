@@ -42,6 +42,31 @@ it.effect("loads gateway IDs without stripping prefixes and selects the matching
   }),
 )
 
+it.effect("caps model windows and reply limits at the plan limits without enlarging smaller models", () =>
+  Effect.gen(function* () {
+    const http = HttpClient.make((request) =>
+      Effect.succeed(
+        HttpClientResponse.fromWeb(
+          request,
+          Response.json({ data: [{ id: "small-model", context_length: 16000, max_output_tokens: 2000 }] }),
+        ),
+      ),
+    )
+    yield* Effect.forEach(
+      [
+        { limits: undefined, expected: { context: 16000, output: 2000 } },
+        { limits: { max_context_tokens: 0, max_output_tokens: 0 }, expected: { context: 16000, output: 2000 } },
+        { limits: { max_context_tokens: 8000, max_output_tokens: 1000 }, expected: { context: 8000, output: 1000 } },
+        { limits: { max_context_tokens: 32000, max_output_tokens: 4000 }, expected: { context: 16000, output: 2000 } },
+      ],
+      (item) =>
+        HoushiarGateway.models(http, "user-key", item.limits).pipe(
+          Effect.map((models) => expect(models[0].limit).toEqual(item.expected)),
+        ),
+    )
+  }),
+)
+
 it.effect("reads authenticated usage from the backend's singular usage endpoint", () =>
   Effect.gen(function* () {
     const http = HttpClient.make((request) => {

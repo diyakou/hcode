@@ -1,4 +1,8 @@
-# هوشیار ۲.۲.۱۱
+# هوشیار ۲.۲.۱۲
+
+- Automatic compaction now uses the smaller of the model window and the account's plan context limit, including after model switches.
+- Reply token limits also respect the account's plan limits.
+- Structured gateway context-limit errors and Persian plan-context messages trigger compaction recovery without deleting the original chat history.
 
 - Added a welcome title to the initial API-key connection dialog.
 - Added persistent API connection and model reload buttons to the new-session screen.

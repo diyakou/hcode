@@ -18,6 +18,12 @@ const decodeModel = Schema.decodeUnknownOption(RemoteModel)
 const Amount = Schema.optional(Schema.NullOr(Schema.Number))
 const Usage = Schema.Struct({
   authenticated: Schema.Boolean,
+  limits: Schema.optional(
+    Schema.Struct({
+      max_context_tokens: Schema.optional(Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)))),
+      max_output_tokens: Schema.optional(Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)))),
+    }),
+  ),
   plan: Schema.optional(Schema.String),
   status: Schema.optional(Schema.String),
   expires_at: Schema.optional(Schema.NullOr(Schema.String)),
@@ -36,7 +42,11 @@ const Usage = Schema.Struct({
   ),
 })
 
-export const models = Effect.fn("Houshiar.models")(function* (http: HttpClient.HttpClient, key: string) {
+export const models = Effect.fn("Houshiar.models")(function* (
+  http: HttpClient.HttpClient,
+  key: string,
+  limits?: (typeof Usage.Type)["limits"],
+) {
   const response = yield* HttpClient.filterStatusOk(http)
     .execute(HttpClientRequest.get(`${Houshiar.baseURL}/models`).pipe(HttpClientRequest.bearerToken(key)))
     .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Catalog)), Effect.timeout("20 seconds"))
@@ -46,7 +56,12 @@ export const models = Effect.fn("Houshiar.models")(function* (http: HttpClient.H
       if (!remote) return []
       const model = Model.Info.default(Provider.ID.make(Houshiar.id), Model.ID.make(remote.id))
       const isClaude = remote.id.toLowerCase().includes("claude")
-      const output = remote.max_output_tokens ?? model.limit.output
+      const context = Math.min(remote.context_length ?? model.limit.context, limits?.max_context_tokens || Infinity)
+      const output = Math.min(
+        remote.max_output_tokens ?? model.limit.output,
+        limits?.max_output_tokens || Infinity,
+        context,
+      )
       const configured: Model.Info = {
         ...model,
         name: remote.name || remote.id,
@@ -54,7 +69,7 @@ export const models = Effect.fn("Houshiar.models")(function* (http: HttpClient.H
         package: isClaude ? "@opencode/ai/providers/anthropic-compatible" : "@opencode/ai/providers/openai-compatible",
         settings: { baseURL: Houshiar.baseURL },
         limit: {
-          context: remote.context_length ?? model.limit.context,
+          context,
           output,
         },
       }
