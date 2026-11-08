@@ -4796,6 +4796,9 @@ export type ExperimentalConfigUpdateInput = { readonly shell: string | null }
 
 export type ExperimentalConfigUpdateOutput = void
 
+export type ExperimentalConfigSkillSourceInput = { readonly directory: AbsolutePath; readonly skill: AbsolutePath; readonly add: boolean }
+export type ExperimentalConfigSkillSourceOutput = void
+
 /** @deprecated Use `ExperimentalSessionStatsInput`. Removed in the next minor. */
 export type SessionStatsInput = ExperimentalSessionStatsInput
 

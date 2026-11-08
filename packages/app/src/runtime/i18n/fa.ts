@@ -1,5 +1,9 @@
 export const dict = {
   "desktop.menu.app": "OpenCode",
+  "project.settings.extensions.skills.path": "مسیر پوشهٔ اسکیل",
+  "project.settings.extensions.skills.pathPlaceholder": "./.opencode/skills/my-skill",
+  "project.settings.extensions.skills.add": "افزودن اسکیل",
+  "project.settings.extensions.skills.remove": "حذف",
   "desktop.menu.file": "فایل",
   "desktop.menu.edit": "ویرایش کنید",
   "desktop.menu.view": "مشاهده کنید",

@@ -18,6 +18,9 @@ import { isRecord } from "./utils/record.js"
 const patterns = [
   // Houshiar may forward only its localized plan-context rejection.
   /درخواست شما شامل [\d۰-۹٠-٩,٬]+ توکن است که از محدودیت پلن شما\s*\(?[\d۰-۹٠-٩,٬]+\s*(?:توکن)?\)?\s*بیشتر است/,
+  /درخواست شما شامل [\d۰-۹٠-٩,٬]+ توکن است/,
+  /از محدودیت (?:پلن|مدل) شما.*?بیشتر است/,
+  /لطفاً تاریخچه مکالمه را کوتاه‌تر کنید/,
   /prompt is too long/i,
   /input is too long for (?:the )?(?:requested|selected) model/i,
   // OpenCode Go
@@ -265,16 +268,24 @@ export function classifyProviderFailure(input: ProviderFailure): AIError["reason
   const text = [input.message, body].filter((value) => value.length > 0).join("\n")
   const clientScoped = input.status === undefined || (input.status >= 400 && input.status < 500)
 
+  const overflowByGateway = [input.data, body, input.message].some(gatewayContextOverflow)
+  const isPlanOverflow =
+    /درخواست شما شامل [\d۰-۹٠-٩,٬]+ توکن است/.test(text) ||
+    /از محدودیت (?:پلن|مدل) شما.*?بیشتر است/.test(text) ||
+    /لطفاً تاریخچه مکالمه را کوتاه‌تر کنید/.test(text)
+
   if (
     clientScoped &&
     (codes.includes("context_length_exceeded") ||
       codes.includes("model_context_window_exceeded") ||
       codes.includes("request_too_large") ||
+      isPlanOverflow ||
       // 429 bodies are throttles even when their wording matches an overflow phrase, e.g. Cerebras's
-      // "too many tokens processed". Text matching stays on for 4xx and mid-stream errors without a status.
-      (input.status !== 429 &&
+      // "too many tokens processed". Text matching stays on for 4xx and mid-stream errors without a status,
+      // and explicit gateway context overflows classify unless marked as quota/rate limits.
+      ((input.status !== 429 || (overflowByGateway && !QUOTA_TEXT.test(text) && !RATE_LIMIT_TEXT.test(text))) &&
         !codes.includes("throttlingexception") &&
-        (isContextOverflow(text) || [input.data, body, input.message].some(gatewayContextOverflow))))
+        (isContextOverflow(text) || overflowByGateway)))
   )
     return new InvalidRequestError({ ...details, classification: "context-overflow" })
   if (input.status === 413 || isPayloadTooLarge(text))
@@ -327,22 +338,29 @@ export function classifyProviderFailure(input: ProviderFailure): AIError["reason
   return new UnknownProviderError(details)
 }
 
+const GatewayContextPayload = Schema.Struct({
+  error: Schema.optional(Schema.Struct({ type: Schema.optional(Schema.String) })),
+  input_tokens: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  max_context_tokens: Schema.Int.check(Schema.isGreaterThan(0)),
+})
+
 const decodeGatewayContext = Schema.decodeUnknownOption(
-  Schema.Struct({
-    detail: Schema.Struct({
-      error: Schema.Struct({ type: Schema.Literal("invalid_request_error") }),
-      input_tokens: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-      max_context_tokens: Schema.Int.check(Schema.isGreaterThan(0)),
+  Schema.Union([
+    GatewayContextPayload,
+    Schema.Struct({
+      detail: GatewayContextPayload,
     }),
-  }),
+  ]),
 )
 
-// Houshiar uses the same rejection when fewer than 16 tokens remain for a reply.
+// Houshiar uses the same rejection when fewer than 16 tokens remain for a reply or tokens exceed max context.
 function gatewayContextOverflow(value: unknown) {
   const decoded = Option.getOrUndefined(
     decodeGatewayContext(typeof value === "string" ? Option.getOrUndefined(decodeJson(value)) : value),
   )
-  return decoded !== undefined && decoded.detail.max_context_tokens - decoded.detail.input_tokens < 16
+  if (!decoded) return false
+  const target = "detail" in decoded ? decoded.detail : decoded
+  return target.max_context_tokens - target.input_tokens < 16
 }
 
 function providerCodes(value: unknown) {

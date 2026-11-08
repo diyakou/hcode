@@ -220,6 +220,9 @@ export const ProjectSettingsExtensions: Component<{
   const directorySDK = useWorkspaceLocation()
   const data = useData()
   const toggleMcp = useMcpToggle(() => directorySDK().directory)
+  const [skillPath, setSkillPath] = createSignal("")
+  const [skillSourcePending, setSkillSourcePending] = createSignal(false)
+  const [skillSourceError, setSkillSourceError] = createSignal<string>()
 
   createEffect(() => {
     if (serverSDK.connection.status() !== "connected") return
@@ -279,6 +282,28 @@ export const ProjectSettingsExtensions: Component<{
     return pluginLabels(projectPluginList.latest ?? []).filter((name) => !shared.has(name))
   })
 
+  const addSkillSource = async () => {
+    const directory = directorySDK().directory
+    const skill = skillPath().trim()
+    if (!skill || skillSourcePending()) return
+    setSkillSourcePending(true)
+    setSkillSourceError(undefined)
+    try {
+      const result = await serverSDK.api.config.skillSource({
+        directory,
+        skill,
+        add: true,
+      })
+      if (result.error) throw result.error
+      setSkillPath("")
+      await data.location.skill.sync({ directory })
+    } catch (error) {
+      setSkillSourceError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSkillSourcePending(false)
+    }
+  }
+
   const serverSkills = createMemo(() => data.location.skill.list() ?? [])
 
   const projectSkills = createMemo(() => {
@@ -311,8 +336,39 @@ export const ProjectSettingsExtensions: Component<{
 
   const pluginRows = (items: string[]) => <For each={items}>{(name) => <ExtensionRow icon="cube" name={name} />}</For>
 
-  const skillRows = (items: SkillItem[]) => (
-    <For each={items}>{(item) => <ExtensionRow icon="post-skill" name={item.name} />}</For>
+  const skillRows = (items: SkillItem[], removable = false) => (
+    <For each={items}>
+      {(item) => (
+        <ExtensionRow icon="post-skill" name={item.name}>
+          <Show when={removable}>
+            <Button
+              variant="ghost-muted"
+              size="small"
+              disabled={skillSourcePending()}
+              onClick={async () => {
+                setSkillSourcePending(true)
+                setSkillSourceError(undefined)
+                try {
+                  const result = await serverSDK.api.config.skillSource({
+                    directory: directorySDK().directory,
+                    skill: item.location,
+                    add: false,
+                  })
+                  if (result.error) throw result.error
+                  await data.location.skill.sync({ directory: directorySDK().directory })
+                } catch (error) {
+                  setSkillSourceError(error instanceof Error ? error.message : String(error))
+                } finally {
+                  setSkillSourcePending(false)
+                }
+              }}
+            >
+              {language.t("project.settings.extensions.skills.remove")}
+            </Button>
+          </Show>
+        </ExtensionRow>
+      )}
+    </For>
   )
 
   return (
@@ -384,8 +440,36 @@ export const ProjectSettingsExtensions: Component<{
                   </ExternalLink>
                 }
               />
+              <div class="flex flex-col gap-2 rounded-lg border border-border-base p-3">
+                <label class="text-12-medium" for="project-skill-path">
+                  {language.t("project.settings.extensions.skills.path")}
+                </label>
+                <div class="flex flex-wrap gap-2">
+                  <input
+                    id="project-skill-path"
+                    class="h-9 min-w-0 flex-1 rounded-md border border-border-base bg-background-base px-3 text-12-regular"
+                    dir="ltr"
+                    value={skillPath()}
+                    placeholder={language.t("project.settings.extensions.skills.pathPlaceholder")}
+                    onInput={(event) => setSkillPath(event.currentTarget.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void addSkillSource()
+                    }}
+                  />
+                  <Button
+                    variant="secondary"
+                    disabled={skillSourcePending() || !skillPath().trim()}
+                    onClick={() => void addSkillSource()}
+                  >
+                    {language.t("project.settings.extensions.skills.add")}
+                  </Button>
+                </div>
+                <Show when={skillSourceError()}>
+                  {(error) => <span role="alert" class="text-12-regular text-text-danger">{error()}</span>}
+                </Show>
+              </div>
               <Show when={projectSkills().length > 0}>
-                <ExtensionCard>{skillRows(projectSkills())}</ExtensionCard>
+                <ExtensionCard>{skillRows(projectSkills(), true)}</ExtensionCard>
               </Show>
               <SharedSection count={serverSkills().length}>{skillRows(serverSkills())}</SharedSection>
             </div>

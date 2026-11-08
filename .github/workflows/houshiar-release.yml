@@ -9,7 +9,7 @@ on:
       tag:
         description: Existing version tag to build
         required: true
-        default: v2.2.12
+        default: v2.2.13
         type: string
 
 env:

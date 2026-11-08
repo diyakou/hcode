@@ -119,6 +119,13 @@ export class Info extends Schema.Class<Info>("Config.Info")({
 export const Patch = Schema.Struct({
   shell: Schema.NullOr(Schema.String),
 }).annotate({ identifier: "Config.Patch" })
+
+export const SkillSourceUpdate = Schema.Struct({
+  directory: AbsolutePath,
+  skill: Schema.String,
+  add: Schema.Boolean,
+}).annotate({ identifier: "Config.SkillSourceUpdate" })
+export interface SkillSourceUpdate extends Schema.Schema.Type<typeof SkillSourceUpdate> {}
 export interface Patch extends Schema.Schema.Type<typeof Patch> {}
 
 export class Document extends Schema.Class<Document>("Config.Document")({

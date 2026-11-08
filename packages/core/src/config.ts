@@ -5,7 +5,7 @@ import path from "path"
 import { isDeepStrictEqual } from "node:util"
 import { applyEdits, modify, type ParseError, parse } from "jsonc-parser"
 import { Context, Effect, FiberMap, Layer, Option, PubSub, Ref, Schema, Semaphore, Stream } from "effect"
-import { Directory, Document, Info, type Patch, type Entry, Event } from "@opencode/schema/config"
+import { Directory, Document, Info, type Patch, type Entry, Event, type SkillSourceUpdate } from "@opencode/schema/config"
 import { Credential } from "./credential.js"
 import { Bus } from "./bus.js"
 import { Watcher } from "./filesystem/watcher.js"
@@ -46,6 +46,8 @@ export interface Interface {
   readonly changes: () => Stream.Stream<Watcher.Update>
   /** Updates supported global config fields while preserving unrelated JSONC content. */
   readonly update?: (patch: Patch) => Effect.Effect<void, FSUtil.Error>
+  /** Adds or removes a local skill source from the workspace's opencode.json(c). */
+  readonly updateSkillSource?: (input: SkillSourceUpdate) => Effect.Effect<void, FSUtil.Error | ConfigSkillSourceError>
   /**
    * Replaces, or clears with `undefined`, the document an integration connection contributes. It loads right after
    * managed policies: its settings layer below remote, user, and project config, while its policies outrank theirs.
@@ -69,6 +71,10 @@ export const Options = Schema.Struct({
   content: Schema.optional(Schema.String),
 })
 export type Options = typeof Options.Type
+
+export class ConfigSkillSourceError extends Schema.TaggedError<ConfigSkillSourceError>()("Config.SkillSourceError", {
+  message: Schema.String,
+}) {}
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Config") {}
 
@@ -485,6 +491,47 @@ export const layer = (options?: Options) =>
         (effect) => updateLock.withPermit(effect),
       )
 
+      const updateSkillSource = Effect.fn("Config.updateSkillSource")(
+        function* (input: SkillSourceUpdate) {
+          const directory = input.directory
+          const filepath = path.join(directory, "opencode.jsonc")
+          const target = path.resolve(directory, input.skill)
+          if (!FSUtil.contains(directory, target))
+            return yield* new ConfigSkillSourceError({ message: "Skill source must be inside the selected workspace" })
+          if (
+            input.add &&
+            !(yield* fs.isDir(target).pipe(Effect.orElseSucceed(() => false)))
+          )
+            return yield* new ConfigSkillSourceError({ message: `Skill directory does not exist: ${target}` })
+          if (input.add && !(yield* fs.isFile(path.join(target, "SKILL.md")).pipe(Effect.orElseSucceed(() => false))))
+            return yield* new ConfigSkillSourceError({ message: `No SKILL.md found in ${target}` })
+          const text = (yield* fs.readFileStringSafe(filepath)) ?? "{}\n"
+          const parsed = yield* Effect.try({
+            try: () => parse(text) as Record<string, unknown>,
+            catch: (cause) => new FSUtil.FileSystemError({ method: "config.updateSkillSource", cause }),
+          })
+          const current = parsed.skills
+          const skills = Array.isArray(current) ? current.filter((item): item is string => typeof item === "string") : []
+          const relative = path.relative(directory, target).split(path.sep).join("/") || "."
+          const next = input.add
+            ? [...new Set([...skills, relative])]
+            : skills.filter((item) => item !== relative && path.resolve(directory, item) !== target)
+          const updated = yield* Effect.try({
+            try: () =>
+              applyEdits(
+                text,
+                modify(text, ["skills"], next.length ? next : undefined, {
+                  formattingOptions: { tabSize: 2, insertSpaces: true },
+                }),
+              ),
+            catch: (cause) => new FSUtil.FileSystemError({ method: "config.updateSkillSource", cause }),
+          })
+          yield* fs.writeWithDirs(filepath, updated.endsWith("\n") ? updated : `${updated}\n`)
+          yield* requestReload
+        },
+        (effect) => updateLock.withPermit(effect),
+      )
+
       return Service.of({
         entries: Effect.fnUntraced(function* () {
           return configs
@@ -496,6 +543,7 @@ export const layer = (options?: Options) =>
           }),
         changes: () => Stream.fromPubSub(updates),
         update,
+        updateSkillSource,
         integration: Effect.fn("Config.integration")(function* (integrationID, document) {
           if (isDeepStrictEqual(integrations.get(integrationID), document)) return
           integrations.delete(integrationID)

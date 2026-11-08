@@ -24,6 +24,12 @@ const Usage = Schema.Struct({
       max_output_tokens: Schema.optional(Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)))),
     }),
   ),
+  context_limit: Schema.optional(Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)))),
+  context: Schema.optional(
+    Schema.Struct({
+      limit: Schema.optional(Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)))),
+    }),
+  ),
   plan: Schema.optional(Schema.String),
   status: Schema.optional(Schema.String),
   expires_at: Schema.optional(Schema.NullOr(Schema.String)),
@@ -45,8 +51,15 @@ const Usage = Schema.Struct({
 export const models = Effect.fn("Houshiar.models")(function* (
   http: HttpClient.HttpClient,
   key: string,
-  limits?: (typeof Usage.Type)["limits"],
+  limitsOrUsage?: (typeof Usage.Type)["limits"] | typeof Usage.Type,
 ) {
+  const limits = limitsOrUsage && "limits" in limitsOrUsage ? limitsOrUsage.limits : limitsOrUsage
+  const planContextLimit =
+    (limitsOrUsage && "context_limit" in limitsOrUsage
+      ? limitsOrUsage.context_limit ?? limitsOrUsage.context?.limit
+      : undefined) ?? limits?.max_context_tokens
+  const maxContext = planContextLimit || limits?.max_context_tokens || Infinity
+  const maxOutput = limits?.max_output_tokens || Infinity
   const response = yield* HttpClient.filterStatusOk(http)
     .execute(HttpClientRequest.get(`${Houshiar.baseURL}/models`).pipe(HttpClientRequest.bearerToken(key)))
     .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Catalog)), Effect.timeout("20 seconds"))
@@ -56,10 +69,10 @@ export const models = Effect.fn("Houshiar.models")(function* (
       if (!remote) return []
       const model = Model.Info.default(Provider.ID.make(Houshiar.id), Model.ID.make(remote.id))
       const isClaude = remote.id.toLowerCase().includes("claude")
-      const context = Math.min(remote.context_length ?? model.limit.context, limits?.max_context_tokens || Infinity)
+      const context = Math.min(remote.context_length ?? model.limit.context, maxContext)
       const output = Math.min(
         remote.max_output_tokens ?? model.limit.output,
-        limits?.max_output_tokens || Infinity,
+        maxOutput,
         context,
       )
       const configured: Model.Info = {

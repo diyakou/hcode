@@ -32,6 +32,19 @@ export const ConfigGroup = HttpApiGroup.make("server.config")
     ),
   )
   .add(
+    HttpApiEndpoint.post("experimental.config.skillSource", "/api/experimental/config/skill-source", {
+      payload: Config.SkillSourceUpdate,
+      success: HttpApiSchema.NoContent,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "experimental.config.skillSource",
+        summary: "Update a workspace skill source",
+        description:
+          "Experimental: add or remove a local skill directory from workspace config. The directory must contain SKILL.md and be inside that workspace.",
+      }),
+    ),
+  )
+  .add(
     HttpApiEndpoint.patch("config.update", "/api/experimental/config", {
       payload: Config.Patch,
       success: HttpApiSchema.NoContent,

@@ -1,3 +1,11 @@
+# هوشیار ۲.۲.۱۳
+
+- برآورد دقیق‌تر توکن‌های غیر ASCII و متون فارسی در فشرده‌سازی خودکار و جلوگیری از سرریز کانتکست (Token.estimate).
+- پشتیبانی کامل از خطاهای سرریز کانتکست پلن هوشیار با کدهای ۴۰۰ و ۴۲۹ و بازیابی خودکار بدون خرابی نشست (Automatic compaction & overflow recovery).
+- اعمال سقف کانتکست پلن هوشیار (۲۰۰٬۰۰۰ توکن) از فیلدهای limits.max_context_tokens و context_limit و context.limit.
+- امکان افزودن دستی آدرس مهارت‌ها (Skill Sources) در بخش تنظیمات افزونه‌ها (Project Extensions).
+- راهنمای هماهنگی و تفکیک وظایف زیرعامل‌ها (Subagent orchestration) جهت انجام کارهای موازی و بازگشت به عامل اصلی.
+
 # هوشیار ۲.۲.۱۲
 
 - The built-in browser skill now guides frontend implementation through screenshots, real interactions, console/network inspection and source fixes followed by verification.

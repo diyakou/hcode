@@ -318,6 +318,8 @@ import type {
   ConfigShellsOutput,
   ExperimentalConfigUpdateInput,
   ExperimentalConfigUpdateOutput,
+  ExperimentalConfigSkillSourceInput,
+  ExperimentalConfigSkillSourceOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -1051,6 +1053,20 @@ export function make(options: ClientOptions) {
         ),
     },
     experimental: {
+      config: {
+        skillSource: (input: ExperimentalConfigSkillSourceInput, requestOptions?: RequestOptions) =>
+          request<ExperimentalConfigSkillSourceOutput>(
+            {
+              method: "POST",
+              path: `/api/experimental/config/skill-source`,
+              body: { directory: input["directory"], skill: input["skill"], add: input["add"] },
+              successStatus: 204,
+              declaredStatuses: [400, 401, 404, 500],
+              empty: true,
+            },
+            requestOptions,
+          ),
+      },
       session: {
         stats: (input?: ExperimentalSessionStatsInput, requestOptions?: RequestOptions) =>
           request<{ readonly data: ExperimentalSessionStatsOutput }>(
@@ -1711,6 +1727,18 @@ export function make(options: ClientOptions) {
           ),
       },
       config: {
+        skillSource: (input: ExperimentalConfigSkillSourceInput, requestOptions?: RequestOptions) =>
+          request<ExperimentalConfigSkillSourceOutput>(
+            {
+              method: "POST",
+              path: `/api/experimental/config/skill-source`,
+              body: { directory: input["directory"], skill: input["skill"], add: input["add"] },
+              successStatus: 204,
+              declaredStatuses: [400, 401, 404, 500],
+              empty: true,
+            },
+            requestOptions,
+          ),
         update: (input: ExperimentalConfigUpdateInput, requestOptions?: RequestOptions) =>
           request<ExperimentalConfigUpdateOutput>(
             {

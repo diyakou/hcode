@@ -8,6 +8,14 @@ export const ConfigHandler = HttpApiBuilder.group(Api, "server.config", (handler
   handlers
     .handle("config.get", () => Config.Service.use((config) => config.entries()))
     .handle(
+      "experimental.config.skillSource",
+      Effect.fn(function* (ctx) {
+        const config = yield* Config.Service
+        if (!config.updateSkillSource) return yield* Effect.die(new Error("Skill source updates are unavailable"))
+        yield* config.updateSkillSource(ctx.payload).pipe(Effect.orDie)
+      }),
+    )
+    .handle(
       "config.update",
       Effect.fn(function* (ctx) {
         const config = yield* Config.Service

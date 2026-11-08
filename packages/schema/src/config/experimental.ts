@@ -43,6 +43,27 @@ export class Info extends Schema.Class<Info>("ConfigExperimental.Info")({
   subagent_depth: NonNegativeInt.pipe(optional).annotate({
     description: "Maximum subagent nesting depth. Defaults to 1.",
   }),
+  model_fallback: Schema.Union([
+    Schema.Boolean,
+    Schema.Struct({
+      models: ConfigModel.Selection.pipe(Schema.Array),
+      auto: Schema.Boolean.pipe(optional),
+    }),
+  ])
+    .pipe(optional)
+    .annotate({
+      description:
+        "Retry eligible model failures with configured fallback models, or automatically with other available chat models. Defaults to disabled.",
+    }),
+  auto: Schema.Boolean.pipe(optional).annotate({
+    description: "Enable automatic task continuation after incomplete model responses. Defaults to false.",
+  }),
+  subagent_orchestration: Schema.Boolean.pipe(optional).annotate({
+    description: "Allow the primary agent to coordinate independent subagent tasks. Defaults to false.",
+  }),
+  manual_skills: Schema.Boolean.pipe(optional).annotate({
+    description: "Allow adding skill directories from the workspace settings UI. Defaults to false.",
+  }),
   location_idle_timeout: Schema.Union([Schema.DurationFromString, Schema.Literal(false)])
     .pipe(optional)
     .annotate({

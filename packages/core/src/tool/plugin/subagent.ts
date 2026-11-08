@@ -60,7 +60,9 @@ export const description = [
   "New child sessions start with fresh context, so include all relevant context and instructions when you don't pass a sessionID.",
   "Foreground (default) runs the subagent to completion and returns its final response.",
   "Background mode (background=true) launches it asynchronously and returns immediately; you are notified when it finishes.",
-  "Use background only for independent work that can run while you continue elsewhere.",
+  "Use background only for independent work that you will not work on yourself while it runs.",
+  "For parallel work, first define separate tasks with exclusive file or topic ownership. Do not assign the same files, edits, or research question to multiple agents, and do not work on a subagent-owned scope until it finishes.",
+  "Prefer subagents for bounded research, review, or isolated file changes. Keep integration and final verification in the parent session.",
 ].join("\n")
 
 export const Plugin = {

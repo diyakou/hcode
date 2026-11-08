@@ -22,6 +22,26 @@ describe("provider error classification", () => {
         })
       })
     })
+    ;[200327, 200000].forEach((tokens) => {
+      const topLevel = {
+        error: {
+          type: "invalid_request_error",
+          message: "درخواست شما شامل 200,327 توکن است که از محدودیت پلن شما (200,000 توکن) بیشتر است. لطفاً تاریخچه مکالمه را کوتاه‌تر کنید یا پلن خود را ارتقا دهید.",
+        },
+        input_tokens: tokens,
+        max_context_tokens: 200000,
+      }
+      const rawBody = JSON.stringify(topLevel)
+      expect(providerErrorMessage(rawBody)).toBe(topLevel.error.message)
+      ;[400, 429].forEach((status) => {
+        ;[{ rawBody }, { data: topLevel }].forEach((payload) => {
+          expect(classifyProviderFailure({ message: topLevel.error.message, status, ...payload })).toMatchObject({
+            _tag: "InvalidRequest",
+            classification: "context-overflow",
+          })
+        })
+      })
+    })
     expect(
       classifyProviderFailure({
         message: "Bad Request",

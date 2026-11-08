@@ -4,6 +4,8 @@ import { Message } from "@opencode/ai/effect"
 import { and, desc, eq, inArray, sql } from "drizzle-orm"
 import { Cause, Effect, Exit, FiberMap, Layer } from "effect"
 import { Database } from "../../database/database.js"
+import { Config } from "../../config.js"
+import { Model } from "../../model.js"
 import { Bus } from "../../bus.js"
 import { LocationLifecycle } from "../../location-lifecycle.js"
 import { InstructionState } from "../instruction-state.js"
@@ -44,6 +46,8 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const bus = yield* Bus.Service
+    const config = yield* Config.Service
+    const models = yield* Model.Service
     const lifecycle = yield* LocationLifecycle.Service
     const store = yield* SessionStore.Service
     const context = yield* SessionContext.Service
@@ -231,6 +235,16 @@ const layer = Layer.effect(
       const sessionID = first.session.id
       let assistantMessageID = SessionMessage.ID.create()
       const retry = yield* SessionRunnerRetry.make(bus, sessionID)
+      const configEntries = yield* config.entries()
+      const fallbackConfig = Config.latest(configEntries, "experimental")?.model_fallback
+      const fallbackModels =
+        fallbackConfig === true || fallbackConfig === undefined || fallbackConfig === false
+          ? []
+          : fallbackConfig.models
+      const fallbackAuto =
+        fallbackConfig === true ||
+        (typeof fallbackConfig === "object" && fallbackConfig.auto === true)
+      let attemptedModels = new Set<string>()
       let initial: SessionContext.Loaded | undefined = first
       let recoverOverflow = true
       let recoverContinuation = true
@@ -238,6 +252,8 @@ const layer = Layer.effect(
         // Reuse boundary preparation once; retries refresh context without delivering more input.
         const loaded = initial ?? (yield* prepareContext(sessionID).pipe(Effect.flatMap(context.load)))
         initial = undefined
+        const modelKey = `${loaded.model.ref.providerID}/${loaded.model.ref.id}`
+        attemptedModels.add(modelKey)
         const estimate = SessionCompaction.estimatePrompt(loaded)
         const compacted = yield* compaction.compact({ reason: "auto", context: loaded, estimate })
         if (compacted.status === "failed") return yield* new StepFailedError({ error: compacted.error })
@@ -318,12 +334,40 @@ const layer = Layer.effect(
               )
             return outcome.needsContinuation
           }),
-          Retry: (outcome) =>
-            retry.wait({
+          Retry: Effect.fnUntraced(function* (outcome) {
+            if (fallbackModels.length > 0 || fallbackAuto) {
+              const available = yield* models.available()
+              const candidates = [
+                ...fallbackModels.flatMap((selection) => {
+                  const id = typeof selection === "string" ? selection.split("#")[0] : `${selection.providerID}/${selection.model}`
+                  const [providerID, modelID] = id.split("/")
+                  return available.filter((item) => item.providerID === providerID && item.id === modelID)
+                }),
+                ...(fallbackAuto ? available : []),
+              ].filter(
+                (candidate, index, all) =>
+                  !attemptedModels.has(`${candidate.providerID}/${candidate.id}`) &&
+                  all.findIndex((item) => item.providerID === candidate.providerID && item.id === candidate.id) === index,
+              )
+              const candidate = candidates[0]
+              if (candidate) {
+                const next = Model.Ref.make({ providerID: candidate.providerID, id: candidate.id })
+                attemptedModels.add(`${candidate.providerID}/${candidate.id}`)
+                yield* bus.publish(SessionEvent.ModelSelected, {
+                  sessionID,
+                  model: next,
+                  previous: loaded.model.ref,
+                })
+                assistantMessageID = SessionMessage.ID.create()
+                return
+              }
+            }
+            yield* retry.wait({
               decision: outcome.decision,
               error: outcome.error,
               assistantMessageID,
-            }),
+            })
+          }),
           Continue: Effect.fnUntraced(function* (outcome) {
             yield* retry.wait({
               decision: outcome.decision,
@@ -440,6 +484,8 @@ export const node = makeLocationNode({
   layer,
   deps: [
     Bus.node,
+    Config.node,
+    Model.node,
     LocationLifecycle.node,
     llmClient,
     SessionContext.node,

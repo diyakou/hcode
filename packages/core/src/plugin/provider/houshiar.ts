@@ -55,7 +55,7 @@ export const HoushiarPlugin = define({
                 Effect.tap(() =>
                   ctx.integration.connection.status({ integrationID: Houshiar.id, connection, status: undefined }),
                 ),
-                Effect.flatMap((usage) => HoushiarGateway.models(http, access.key, usage.limits)),
+                Effect.flatMap((usage) => HoushiarGateway.models(http, access.key, usage)),
                 Effect.tapError((error) => {
                   if (!HttpClientError.isHttpClientError(error) || error.reason._tag !== "StatusCodeError")
                     return Effect.void
