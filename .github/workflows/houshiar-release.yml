@@ -43,12 +43,12 @@ jobs:
             executable: opencode
           - target: darwin-arm64
             cli: darwin-arm64
-            runner: macos-14
+            runner: macos-15
             executable: opencode
             install: --os=darwin --cpu=arm64
           - target: darwin-x64
             cli: darwin-x64-baseline
-            runner: macos-14
+            runner: macos-15
             executable: opencode
             install: --os=darwin --cpu=*
     runs-on: ${{ matrix.runner }}
