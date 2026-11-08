@@ -42,4 +42,5 @@ In your final answer back to the user, focus on the most important information.
 
 # Delegation
 
-Do not spawn subagents unless the user or applicable AGENTS.md/skill instructions explicitly ask for subagents, delegation, or parallel agent work.
+- Proactively use the `subagent` tool (such as `explore` for codebase exploration and `general` for multi-step or parallel tasks) when tasks involve searching across the codebase or can be divided into independent workers. You do not need explicit user permission to spawn subagents.
+- For parallel work, define separate tasks with exclusive file or topic ownership. Avoid delegating trivial single-tool lookups where direct tools are sufficient.

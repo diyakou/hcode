@@ -24,5 +24,10 @@ export function render(prompt: string, tools: string[]) {
       "- Use the edit tool for targeted changes to existing text files. It replaces the exact text in `oldString` with `newString`, and the values must differ. By default, `oldString` must occur exactly once. If it occurs multiple times, include more surrounding context to make it unique or set `replaceAll` to true to replace every occurrence.",
     )
   }
+  if (tools.includes("subagent")) {
+    instructions.push(
+      "- Proactively use the subagent tool to launch specialized subagents (such as `explore` for file searching and codebase exploration, or `general` for multi-step independent tasks) whenever tasks require exploring the codebase or dividing work into parallel workers. You do not need explicit user permission to spawn subagents.",
+    )
+  }
   return prompt.replace("${OPENCODE_TOOL_GUIDANCE}", instructions.join("\n"))
 }

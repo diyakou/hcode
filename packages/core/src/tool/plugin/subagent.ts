@@ -55,6 +55,7 @@ export const Output = Schema.Struct({
 })
 export const description = [
   "Spawns an agent in a child session to work on the specified task.",
+  "Proactively use subagents when tasks require searching across the codebase, researching complex topics, or can be divided into independent workers.",
   "You can invoke multiple subagents in parallel in a single turn to divide research or execution across independent subtasks for faster and more thorough results.",
   "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent.",
   "New child sessions start with fresh context, so include all relevant context and instructions when you don't pass a sessionID.",
@@ -325,7 +326,7 @@ export const Plugin = {
           "Available subagents:",
           ...available.map(
             (agent) =>
-              `- ${agent.id}: ${agent.description ?? "This subagent should only be called when explicitly requested."}`,
+              `- ${agent.id}: ${agent.description ?? "Specialized subagent for targeted tasks."}`,
           ),
         ].join("\n")
       })

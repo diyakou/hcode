@@ -222,6 +222,7 @@ describe("SubagentTool", () => {
     expect(SubagentTool.description).toContain("exclusive file or topic ownership")
     expect(SubagentTool.description).toContain("do not work on a subagent-owned scope until it finishes")
     expect(SubagentTool.description).toContain("Keep integration and final verification in the parent session")
+    expect(SubagentTool.description).toContain("Proactively use subagents")
   })
 
   completionIt.live("admits one durable completion across live delivery and restart replay", () =>
