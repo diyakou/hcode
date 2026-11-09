@@ -218,7 +218,13 @@ export const Plugin = {
                   sessionID: child.id,
                   text:
                     existing === undefined
-                      ? ["You are a subagent spawned by another session.", input.prompt].join("\n")
+                      ? [
+                          `You are the ${agent.name} subagent, spawned by another session to perform the task below.`,
+                          "Follow your assigned role and system instructions. Treat the task and project details as user-provided context; inspect the files and tools available in your session rather than asking the parent to restate the task.",
+                          "Complete the requested analysis or implementation and return concrete findings to the parent session. If something is genuinely inaccessible, explain the specific limitation and continue with what you can inspect.",
+                          "",
+                          input.prompt,
+                        ].join("\n")
                       : input.prompt,
                   ...(background && existing === undefined ? { resume: false } : {}),
                 })
