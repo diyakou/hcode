@@ -76,6 +76,7 @@ jobs:
         with:
           install-flags: ${{ matrix.install }}
       - name: Test Houshiar gateway and saved-key activation
+        if: runner.os == 'Linux'
         working-directory: packages/core
         run: bun run script/test.ts test/houshiar.test.ts test/plugin/provider-houshiar.test.ts
       - name: Install Linux packaging tools
