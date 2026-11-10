@@ -43,7 +43,7 @@ jobs:
             executable: opencode
           - target: darwin-arm64
             cli: darwin-arm64
-            runner: macos-14
+            runner: macos-latest
             executable: opencode
           - target: darwin-x64
             cli: darwin-x64-baseline
