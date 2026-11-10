@@ -40,5 +40,7 @@ export const Updater = Ipc.define({
   events: {
     /** The app menu asks the focused window to check with in-app feedback (beta builds). */
     check: Schema.Null,
+    /** Main reports an available update and its GitHub release page to one window. */
+    update: Schema.Struct({ version: Schema.String, url: Schema.String }),
   },
 })

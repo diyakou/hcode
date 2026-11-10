@@ -8,6 +8,8 @@ const ReleaseNotes = Schema.Struct({ enabled: Schema.Boolean })
 
 const Seen = Schema.Struct({ version: Schema.optional(Schema.String), commit: Schema.optional(Schema.String) })
 
+const UpdateNotice = Schema.Struct({ version: Schema.optional(Schema.String) })
+
 export default Plugin.define({
   stores: {
     // Whether What's New shows after an update; stored before in the app settings.
@@ -26,6 +28,7 @@ export default Plugin.define({
     // The version whose What's New was last shown or skipped, and on beta its commit; stored before under the app's
     // own key.
     seen: Store.global(Seen, {}, "highlights.v1"),
+    updateNotice: Store.global(UpdateNotice, {}, "update-notice.v1"),
   },
   i18n: builtinCatalog({
     en,

@@ -57,13 +57,11 @@ async function setup(input?: {
           catch: (error) => error,
         })
       }),
-      externalInstall: input?.external
-        ? (url) =>
-            Effect.tryPromise(async () => {
-              calls.push(`external:${url}`)
-              await input.open?.()
-            })
-        : undefined,
+      externalInstall: (url) =>
+        Effect.tryPromise(async () => {
+          calls.push(`external:${url}`)
+          await input?.open?.()
+        }),
     },
     restart: (handoff) =>
       Effect.suspend(() => {

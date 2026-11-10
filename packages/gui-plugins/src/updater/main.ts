@@ -10,7 +10,7 @@ const setup: Plugin.MainSetup = async (ctx) => {
   const builtin = builtinMainContext(ctx)
   const build = ctx.app
   const lifecycle = builtin.lifecycle
-  const enabled = build.packaged
+  const enabled = build.packaged && build.channel !== "local"
   // Holds no resources, so it needs no cleanup.
   const context = logContext(ctx.log.write)
   const runPromise = Effect.runPromiseWith(context)
@@ -56,6 +56,21 @@ const setup: Plugin.MainSetup = async (ctx) => {
     state: () => updater.state(),
     check: () => runPromise(updater.check),
     install: () => runPromise(updater.install),
+  })
+  ctx.windows.on("open", (window) => {
+    const current = updater.state()
+    if (current.status !== "download-required") return
+    provider.emit(
+      "update",
+      {
+        version: current.version,
+        url:
+          build.channel === "beta"
+            ? "https://github.com/diyakou/hcode/releases/tag/beta"
+            : "https://github.com/diyakou/hcode/releases/latest",
+      },
+      window.id,
+    )
   })
 
   publish.changed = () => provider.changed()

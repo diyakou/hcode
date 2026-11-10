@@ -1,5 +1,6 @@
 import { showToast } from "@opencode/ui/toast"
 import { lazy, onCleanup, Suspense } from "solid-js"
+import { createKeyed } from "@opencode/plugin/gui"
 import { Command, SettingsPage, TitlebarItem, type SetupContext, type Plugin } from "@opencode/plugin/gui"
 import { onIdle } from "@opencode/plugin/gui/builtin"
 import { Updater } from "@opencode/plugin/gui/updater"
@@ -14,7 +15,42 @@ const setup: Plugin.Setup<typeof definition> = (ctx) => {
   const updater = ctx.main(Updater)
   // Undefined until main's updater is up and has sent its state, and again while it is gone.
   const state = () => updater.state()
+  const notice = ctx.stores.updateNotice
+  createKeyed(notice.value.version, (lastNotified) => {
+    if (ctx.app.channel !== "prod" || lastNotified === ctx.app.version) return
 
+    void updater
+      .check({ signal: ctx.signal })
+      .then((result) => {
+        if (ctx.signal.aborted || !result || result.status === "disabled" || result.status === "error") return
+        if (result.status !== "download-required") return
+
+        notice.update((draft) => {
+          draft.version = ctx.app.version
+        })
+
+        showToast({
+          title: ctx.t("status.label"),
+          description: ctx.t("dialog.available.message", { version: result.version }),
+          persistent: true,
+          actions: [
+            {
+              label: ctx.t("dialog.viewRelease"),
+              variant: "primary",
+              onClick: () => ctx.system.openExternal("https://github.com/diyakou/hcode/releases/latest"),
+            },
+            { label: ctx.t("dialog.later"), variant: "secondary", onClick: "dismiss" },
+          ],
+        })
+      })
+      .catch((cause: unknown) => {
+        if (!ctx.signal.aborted)
+          showToast({
+            title: ctx.t("common.requestFailed"),
+            description: cause instanceof Error ? cause.message : undefined,
+          })
+      })
+  })
   const act = (name: "check" | "install") => {
     if (state()) return void import("./actions").then((module) => module[name](ctx, updater))
 
@@ -73,6 +109,22 @@ const setup: Plugin.Setup<typeof definition> = (ctx) => {
   // Beta builds answer the app menu's Check for Updates in the focused window instead of a native dialog. The
   // listener follows main's updater across restarts.
   updater.on("check", () => act("check"))
+  updater.on("update", (event) => {
+    if (ctx.app.channel !== "prod") return
+    showToast({
+      title: ctx.t("status.label"),
+      description: ctx.t("dialog.available.message", { version: event.version }),
+      persistent: true,
+      actions: [
+        {
+          label: ctx.t("dialog.viewRelease"),
+          variant: "primary",
+          onClick: () => ctx.system.openExternal(event.url),
+        },
+        { label: ctx.t("dialog.later"), variant: "secondary", onClick: "dismiss" },
+      ],
+    })
+  })
 }
 
 /**

@@ -9,7 +9,7 @@ on:
       tag:
         description: Existing version tag to build
         required: true
-        default: v2.2.15
+        default: v2.2.16
         type: string
 
 env:
@@ -171,6 +171,43 @@ jobs:
           cd release
           sha256sum * > SHA256SUMS.txt
           cd ..
+          RELEASE_VERSION="${RELEASE_TAG#v}"
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+
+          # Generate auto-update manifests
+          win=("release/houshiar-${RELEASE_VERSION}-windows-x64.exe")
+          mac=("release/houshiar-${RELEASE_VERSION}-darwin-arm64.zip" "release/houshiar-${RELEASE_VERSION}-darwin-x64.zip")
+          linux=("release/houshiar-${RELEASE_VERSION}-linux-x64.AppImage")
+          for file in "${win[@]}" "${mac[@]}" "${linux[@]}"; do test -s "$file" || { echo "Missing updater asset: $file" >&2; exit 1; }; done
+
+          # electron-updater's generic provider reads latest.yml, latest-mac.yml and latest-linux.yml.
+
+          feed() {
+            for file in "$@"; do
+              test -s "$file" || continue
+              jq -n --arg url "https://github.com/diyakou/hcode/releases/download/v${RELEASE_VERSION}/$(basename "$file")" \
+                --arg sha512 "$(openssl dgst -sha512 -binary "$file" | base64 | tr -d '\n')" --argjson size "$(wc -c < "$file" | tr -d ' ')" \
+                '{url: $url, sha512: $sha512, size: $size}'
+            done | jq -s --arg date "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" '{files: ., releaseDate: $date}'
+          }
+
+          win_feed=$(feed "${win[@]}")
+          mac_feed=$(feed "${mac[@]}")
+          linux_feed=$(feed "${linux[@]}")
+
+          write_manifest() {
+            local file=$1 platform=$2 feed=$3
+            local asset="$(basename "$file")"
+            local url="https://github.com/diyakou/hcode/releases/download/${RELEASE_TAG}/$asset"
+            jq -n --arg version "$RELEASE_VERSION" --arg path "$url" --arg sha512 "$(openssl dgst -sha512 -binary "$file" | base64 | tr -d '\n')" \
+              --argjson size "$(wc -c < "$file" | tr -d ' ')" --argjson files "$feed" \
+              '{version: $version, files: $files, path: $path, sha512: $sha512, size: $size, releaseDate: (now | todate)}' \
+              > "release/$platform.yml"
+          }
+          write_manifest "${win[0]}" latest "$win_feed"
+          write_manifest "${mac[0]}" latest-mac "$mac_feed"
+          write_manifest "${linux[0]}" latest-linux "$linux_feed"
+
           if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$RELEASE_TAG" --verify-tag --title "Houshiar ${RELEASE_TAG#v}" --notes-file HOUSHIAR_RELEASE.md --repo "$GITHUB_REPOSITORY"
           fi

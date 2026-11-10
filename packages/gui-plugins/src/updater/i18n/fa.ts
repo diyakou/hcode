@@ -25,6 +25,8 @@ export default {
   "dialog.ready.title": "به روز رسانی آماده است",
   "dialog.restart": "راه اندازی مجدد",
   "dialog.later": "بعدا",
+  "dialog.viewRelease": "مشاهدهٔ انتشار",
+  "dialog.available.message": "نسخهٔ {{version}} در دسترس است. برای دریافت آن، آخرین انتشار را ببینید.",
   "releaseNotes.action.getStarted": "شروع کنید",
   "releaseNotes.action.next": "بعدی",
   "releaseNotes.action.hideFuture": "اینها را در آینده نشان ندهید",

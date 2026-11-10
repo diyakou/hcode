@@ -10,7 +10,7 @@ export type Platform = {
   readonly stageUpdate: (options: { readonly differential: boolean }) => Effect.Effect<unknown, unknown>
   /** Starts quitAndInstall; succeeds once the app begins quitting for the update. */
   readonly installAndRestart: Effect.Effect<void, unknown>
-  readonly externalInstall?: (url: string) => Effect.Effect<void, unknown>
+  readonly externalInstall: (url: string) => Effect.Effect<void, unknown>
 }
 
 export type Dependencies = {
@@ -183,8 +183,7 @@ export const make = Effect.fn("Updater.make")(function* (dependencies: Dependenc
         yield* pending ? Deferred.await(pending) : refreshExternal(platform)
 
         if (!target || target.mode !== "external" || !platform.externalInstall)
-          return yield* Effect.fail(new Error("External installer is unavailable"))
-        transition({ status: "installing", version: target.version })
+          return yield* Effect.fail(new Error("External release is unavailable"))
 
         return yield* platform.externalInstall(target.url)
       }).pipe(

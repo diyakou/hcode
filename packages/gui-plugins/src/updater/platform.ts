@@ -1,6 +1,6 @@
+import { app, autoUpdater } from "electron"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
-import { app, autoUpdater } from "electron"
 import pkg from "electron-updater"
 import { Effect } from "effect"
 import type { Platform } from "./machine"
@@ -14,7 +14,7 @@ const restartTimeout = 10_000
 const unpackTimeout = 120_000
 
 export const make = Effect.fn("Updater.platform")(function* (channel: string) {
-  const userAgent = `opencode/${channel === "prod" ? "latest" : channel}/${app.getVersion()}/desktop`
+  const userAgent = `houshiar/${channel === "prod" ? "latest" : channel}/${app.getVersion()}/desktop`
   const runFork = Effect.runForkWith(yield* Effect.context())
   updateClient.logger = {
     info: (...args) => runFork(Effect.logInfo(...args)),
@@ -22,12 +22,19 @@ export const make = Effect.fn("Updater.platform")(function* (channel: string) {
     error: (...args) => runFork(Effect.logError(...args)),
     debug: (...args) => runFork(Effect.logDebug(...args)),
   }
-  updateClient.channel = "latest"
+  updateClient.setFeedURL({
+    provider: "generic",
+    url:
+      channel === "beta"
+        ? "https://github.com/diyakou/hcode/releases/download/beta/"
+        : "https://github.com/diyakou/hcode/releases/latest/download/",
+  })
+  updateClient.channel = channel === "beta" ? "beta" : "latest"
   updateClient.requestHeaders = { "User-Agent": userAgent }
   updateClient.allowPrerelease = false
   updateClient.allowDowngrade = true
   updateClient.autoDownload = false
-  updateClient.autoInstallOnAppQuit = process.platform === "darwin"
+  updateClient.autoInstallOnAppQuit = false
   yield* Effect.logInfo("auto updater configured", {
     channel: updateClient.channel,
     allowPrerelease: updateClient.allowPrerelease,
@@ -41,23 +48,18 @@ export const make = Effect.fn("Updater.platform")(function* (channel: string) {
         const result = await updateClient.checkForUpdates()
 
         if (!result?.isUpdateAvailable) return undefined
-        const files = result.updateInfo.files
-        // electron-updater picks the installer whose name contains process.arch, which emulation on Windows ARM64
-        // reports as x64. downloadUpdate() reads this same list, so keeping only the ARM64 installer moves the install
-        // to the native build. macOS needs nothing here: electron-updater already prefers arm64 under Rosetta.
-        const native = files.filter((file) => file.url.includes("arm64"))
-
-        if (process.platform === "win32" && app.runningUnderARM64Translation && native.length > 0) {
-          files.splice(0, files.length, ...native)
-          runFork(
-            Effect.logInfo("updating emulated x64 install to native ARM64", { urls: native.map((file) => file.url) }),
-          )
-        }
-
-        return { mode: "restart", version: result.updateInfo.version } as const
+        return {
+          mode: "external",
+          version: result.updateInfo.version,
+          url:
+            channel === "beta"
+              ? `https://github.com/diyakou/hcode/releases/tag/v${result.updateInfo.version}`
+              : "https://github.com/diyakou/hcode/releases/latest",
+        } as const
       },
       catch: (error) => error,
     }),
+    externalInstall: (url) => Effect.sync(() => app.openExternal(url)),
     stageUpdate,
     installAndRestart,
   } satisfies Platform
@@ -67,9 +69,6 @@ function stageUpdate(options: { readonly differential: boolean }) {
   if (process.platform !== "darwin")
     return Effect.tryPromise({
       try: () => {
-        // Only the NSIS cache goes stale: macOS refreshes its cached zip with every download and AppImage reads the
-        // blockmap embedded in the running file. An emulated x64 install updates to the ARM64 installer, which cannot
-        // be patched from the cached x64 one.
         updateClient.disableDifferentialDownload =
           process.platform === "win32" && (!options.differential || app.runningUnderARM64Translation)
 
@@ -102,9 +101,6 @@ function stageUpdate(options: { readonly differential: boolean }) {
   })
 }
 
-// The NSIS installer unpacks the update beside the install directory while the app keeps running, so the
-// install after the restart moves one directory into place instead of decompressing the whole app. When this
-// fails, the restart still installs the update, only slower.
 function unpackInstaller(files: string[]) {
   const installer = files.find((file) => file.endsWith(".exe"))
 
