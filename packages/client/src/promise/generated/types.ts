@@ -2506,6 +2506,12 @@ export type ConfigEntry =
           schedules?: boolean
           artifacts?: boolean
           subagent_depth?: number
+          model_fallback?:
+            | boolean
+            | { models: Array<string | { providerID: string; model: string; variant?: string }>; auto?: boolean }
+          auto?: boolean
+          subagent_orchestration?: boolean
+          manual_skills?: boolean
           location_idle_timeout?: string | false
           policies?: Array<{
             action:
@@ -4792,12 +4798,17 @@ export type ConfigGetOutput = Array<ConfigEntry>
 
 export type ConfigShellsOutput = Array<ConfigShellOption>
 
+export type ExperimentalConfigSkillSourceInput = {
+  readonly directory: string
+  readonly skill: string
+  readonly add: boolean
+}
+
+export type ExperimentalConfigSkillSourceOutput = void
+
 export type ExperimentalConfigUpdateInput = { readonly shell: string | null }
 
 export type ExperimentalConfigUpdateOutput = void
-
-export type ExperimentalConfigSkillSourceInput = { readonly directory: AbsolutePath; readonly skill: AbsolutePath; readonly add: boolean }
-export type ExperimentalConfigSkillSourceOutput = void
 
 /** @deprecated Use `ExperimentalSessionStatsInput`. Removed in the next minor. */
 export type SessionStatsInput = ExperimentalSessionStatsInput
@@ -4942,6 +4953,12 @@ export type UsageLimitsInput = ExperimentalUsageLimitsInput
 
 /** @deprecated Use `ExperimentalUsageLimitsOutput`. Removed in the next minor. */
 export type UsageLimitsOutput = ExperimentalUsageLimitsOutput
+
+/** @deprecated Use `ExperimentalConfigSkillSourceInput`. Removed in the next minor. */
+export type ConfigSkillSourceInput = ExperimentalConfigSkillSourceInput
+
+/** @deprecated Use `ExperimentalConfigSkillSourceOutput`. Removed in the next minor. */
+export type ConfigSkillSourceOutput = ExperimentalConfigSkillSourceOutput
 
 /** @deprecated Use `ExperimentalConfigUpdateInput`. Removed in the next minor. */
 export type ConfigUpdateInput = ExperimentalConfigUpdateInput

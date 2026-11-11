@@ -2768,9 +2768,22 @@ export interface ConfigApi<E = never> {
   readonly get: ConfigGetOperation<E>
   readonly shells: ConfigShellsOperation<E>
 
+  /** @deprecated Use `client.experimental.config.skillSource`. Removed in the next minor. */
+  readonly skillSource: ExperimentalConfigSkillSourceOperation<E>
+
   /** @deprecated Use `client.experimental.config.update`. Removed in the next minor. */
   readonly update: ExperimentalConfigUpdateOperation<E>
 }
+
+export type ExperimentalConfigSkillSourceInput = {
+  readonly directory: AbsolutePath
+  readonly skill: string
+  readonly add: boolean
+}
+export type ExperimentalConfigSkillSourceOutput = void
+export type ExperimentalConfigSkillSourceOperation<E = never> = (
+  input: ExperimentalConfigSkillSourceInput,
+) => Effect.Effect<ExperimentalConfigSkillSourceOutput, E>
 
 export type ExperimentalConfigUpdateInput = { readonly shell: string | null }
 export type ExperimentalConfigUpdateOutput = void
@@ -2779,6 +2792,7 @@ export type ExperimentalConfigUpdateOperation<E = never> = (
 ) => Effect.Effect<ExperimentalConfigUpdateOutput, E>
 
 export interface ExperimentalConfigApi<E = never> {
+  readonly skillSource: ExperimentalConfigSkillSourceOperation<E>
   readonly update: ExperimentalConfigUpdateOperation<E>
 }
 
@@ -2991,6 +3005,15 @@ export type UsageLimitsOutput = ExperimentalUsageLimitsOutput
 
 /** @deprecated Use `ExperimentalUsageLimitsOperation`. Removed in the next minor. */
 export type UsageLimitsOperation<E = never> = ExperimentalUsageLimitsOperation<E>
+
+/** @deprecated Use `ExperimentalConfigSkillSourceInput`. Removed in the next minor. */
+export type ConfigSkillSourceInput = ExperimentalConfigSkillSourceInput
+
+/** @deprecated Use `ExperimentalConfigSkillSourceOutput`. Removed in the next minor. */
+export type ConfigSkillSourceOutput = ExperimentalConfigSkillSourceOutput
+
+/** @deprecated Use `ExperimentalConfigSkillSourceOperation`. Removed in the next minor. */
+export type ConfigSkillSourceOperation<E = never> = ExperimentalConfigSkillSourceOperation<E>
 
 /** @deprecated Use `ExperimentalConfigUpdateInput`. Removed in the next minor. */
 export type ConfigUpdateInput = ExperimentalConfigUpdateInput

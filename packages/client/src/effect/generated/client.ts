@@ -314,6 +314,8 @@ import type {
   ConfigGetInput,
   ConfigGetOutput,
   ConfigShellsOutput,
+  ExperimentalConfigSkillSourceInput,
+  ExperimentalConfigSkillSourceOutput,
   ExperimentalConfigUpdateInput,
   ExperimentalConfigUpdateOutput,
 } from "../api/api.js"
@@ -1934,12 +1936,21 @@ const adaptGroupConfig = (raw: RawClient["server.config"]) => ({
   shells: EndpointConfigShells(raw),
 })
 
+const EndpointExperimentalConfigSkillSource =
+  (raw: RawClient["server.config"]) => (input: ExperimentalConfigSkillSourceInput) =>
+    preserveEffect<ExperimentalConfigSkillSourceOutput>()(
+      raw["experimental.config.skillSource"]({
+        payload: { directory: input["directory"], skill: input["skill"], add: input["add"] },
+      }).pipe(Effect.mapError(mapClientError)),
+    )
+
 const EndpointExperimentalConfigUpdate = (raw: RawClient["server.config"]) => (input: ExperimentalConfigUpdateInput) =>
   preserveEffect<ExperimentalConfigUpdateOutput>()(
     raw["config.update"]({ payload: { shell: input["shell"] } }).pipe(Effect.mapError(mapClientError)),
   )
 
 const adaptGroupExperimentalConfig = (raw: RawClient["server.config"]) => ({
+  skillSource: EndpointExperimentalConfigSkillSource(raw),
   update: EndpointExperimentalConfigUpdate(raw),
 })
 
@@ -2076,6 +2087,8 @@ const adaptClient = (raw: RawClient) => {
     },
     config: {
       ...client.config,
+      /** @deprecated Use `client.experimental.config.skillSource`. Removed in the next minor. */
+      skillSource: client.experimental.config.skillSource,
       /** @deprecated Use `client.experimental.config.update`. Removed in the next minor. */
       update: client.experimental.config.update,
     },
