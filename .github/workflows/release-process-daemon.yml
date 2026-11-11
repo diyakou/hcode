@@ -103,7 +103,6 @@ jobs:
       - name: Test service
         run: cargo test --locked --target "${{ matrix.target }}" --lib --test service --test ownership
       - name: Test CLI integration
-        if: runner.os != 'macOS'
         run: cargo test --locked --target "${{ matrix.target }}" --test playground
       - name: Build
         run: |
