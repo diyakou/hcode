@@ -1,5 +1,6 @@
 import type { LocationRef } from "@opencode/client/promise"
 import { Houshiar } from "@opencode/schema/houshiar"
+import type { Schema } from "effect"
 import { Button } from "@opencode/ui/button"
 import { Dialog, DialogBody, DialogHeader, DialogTitle } from "@opencode/ui/dialog"
 import { Loader } from "@opencode/ui/loader"
@@ -16,7 +17,12 @@ export function HoushiarUsageDialog(props: {
 }) {
   const sdk = useServerSDK()
   const language = useLanguage()
-  const [state, setState] = createStore({ loading: true, summary: "", fiveHour: undefined as Houshiar.FiveHourStatus.Type | undefined, error: "" })
+  const [state, setState] = createStore({
+    loading: true,
+    summary: "",
+    fiveHour: undefined as Schema.Schema.Type<typeof Houshiar.FiveHourStatus> | undefined,
+    error: "",
+  })
   const load = () => {
     setState({ loading: true, error: "" })
     const current = props.model?.current()

@@ -8,6 +8,8 @@ import { useLanguage } from "@/runtime/i18n/language"
 import { useServerSDK } from "@/runtime/server/client"
 import { formatServerError } from "@/runtime/server/errors"
 import { showToast } from "@/shell/notifications/toast"
+import { createStore } from "solid-js/store"
+import { Show } from "solid-js"
 
 export function DialogTask(props: { mode?: "now" | "later" }) {
   const params = useParams()
@@ -20,7 +22,7 @@ export function DialogTask(props: { mode?: "now" | "later" }) {
     if (!params.id || !state.prompt.trim()) return
     setState({ loading: true, error: "" })
     try {
-      if (state.mode === "now") {
+      if (props.mode === "now") {
         await data.session.prompt({ sessionID: params.id, text: state.prompt.trim() })
         showToast({ title: language.t("task.schedule.started") })
         dialog.close()
