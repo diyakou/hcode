@@ -16,7 +16,7 @@ const setup: Plugin.Setup<typeof definition> = (ctx) => {
   // Undefined until main's updater is up and has sent its state, and again while it is gone.
   const state = () => updater.state()
   const notice = ctx.stores.updateNotice
-  createKeyed(notice.value.version, (lastNotified) => {
+  createKeyed(() => notice.value.version, (lastNotified) => {
     if (ctx.app.channel !== "prod" || lastNotified === ctx.app.version) return
 
     void updater

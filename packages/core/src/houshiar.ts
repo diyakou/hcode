@@ -104,6 +104,16 @@ export const models = Effect.fn("Houshiar.models")(function* (
     .toSorted((a, b) => a.id.localeCompare(b.id))
 })
 
+export const fiveHour = Effect.fn("Houshiar.fiveHour")(function* (http: HttpClient.HttpClient, key: string, model?: string) {
+  const request = HttpClientRequest.get(`${Houshiar.baseURL}/usage/five-hour`).pipe(
+    HttpClientRequest.bearerToken(key),
+  )
+  const response = yield* HttpClient.filterStatusOk(http)
+    .execute(model ? HttpClientRequest.setUrlParam(request, "model", model) : request)
+    .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Houshiar.FiveHourStatus)), Effect.timeout("20 seconds"))
+  return response
+})
+
 export const usage = Effect.fn("Houshiar.usage")(function* (http: HttpClient.HttpClient, key: string) {
   const response = yield* HttpClient.filterStatusOk(http)
     .execute(HttpClientRequest.get(`${Houshiar.baseURL}/usage`).pipe(HttpClientRequest.bearerToken(key)))

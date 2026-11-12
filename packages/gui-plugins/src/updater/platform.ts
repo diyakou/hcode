@@ -1,4 +1,4 @@
-import { app, autoUpdater } from "electron"
+import { app, autoUpdater, shell } from "electron"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import pkg from "electron-updater"
@@ -59,7 +59,7 @@ export const make = Effect.fn("Updater.platform")(function* (channel: string) {
       },
       catch: (error) => error,
     }),
-    externalInstall: (url) => Effect.sync(() => app.openExternal(url)),
+    externalInstall: (url) => Effect.tryPromise({ try: () => shell.openExternal(url), catch: (error) => error }),
     stageUpdate,
     installAndRestart,
   } satisfies Platform

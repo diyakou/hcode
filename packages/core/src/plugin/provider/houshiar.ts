@@ -75,6 +75,49 @@ export const HoushiarPlugin = define({
       }),
     })
 
+    yield* ctx.session.hook(
+      "model.request",
+      (event) =>
+        Effect.gen(function* () {
+          if (event.kind !== "primary") return
+          const session = yield* ctx.session.get({ sessionID: event.sessionID })
+          const conversationID = session.metadata?.houshiarConversationID
+          event.options = {
+            ...event.options,
+            http: {
+              ...event.options.http,
+              body: {
+                ...event.options.http?.body,
+                ...(conversationID ? { conversation_id: conversationID } : { memory_enabled: true }),
+              },
+              headers: {
+                ...event.options.http?.headers,
+                ...(conversationID ? { "X-Conversation-ID": conversationID } : {}),
+                ...(typeof session.metadata?.houshiarServerRevision === "number"
+                  ? { "X-Memory-Revision": String(session.metadata.houshiarServerRevision) }
+                  : {}),
+              },
+            },
+          }
+        }),
+      { providerID: Provider.ID.make(Houshiar.id) },
+    )
+    yield* ctx.session.hook(
+      "http.response",
+      (event) =>
+        Effect.gen(function* () {
+          if (event.kind !== "primary") return
+          const conversationID = event.response.headers.get("X-Conversation-ID")
+          if (!conversationID) return
+          const session = yield* ctx.session.get({ sessionID: event.sessionID })
+          yield* ctx.session.update({
+            sessionID: event.sessionID,
+            metadata: { ...(session.metadata ?? {}), houshiarConversationID: conversationID },
+          })
+        }),
+      { providerID: Provider.ID.make(Houshiar.id) },
+    )
+
     yield* ctx.provider.transform((providers) => {
       for (const item of providers.list()) providers.remove(item.provider.id)
       providers.add({
@@ -114,6 +157,17 @@ export const HoushiarPlugin = define({
               context.error(
                 "unavailable",
                 "Unable to load Houshiar usage. Check your API key and connection.",
+                "usage_unavailable",
+              ),
+            ),
+          ),
+        fiveHour: (input, context) =>
+          key().pipe(
+            Effect.flatMap((access) => HoushiarGateway.fiveHour(http, access.key, input.model)),
+            Effect.mapError(() =>
+              context.error(
+                "unavailable",
+                "Unable to load Houshiar five-hour usage. Check your API key and connection.",
                 "usage_unavailable",
               ),
             ),
