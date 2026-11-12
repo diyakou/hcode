@@ -2,6 +2,7 @@ import http from "node:http"
 import { getCACertificates, setDefaultCACertificates } from "node:tls"
 import { app } from "electron"
 import { Effect, Path } from "effect"
+import { discoverSystemProxy } from "@opencode/util/proxy-discovery"
 import { DesktopPaths } from "../paths"
 import { getUserShell, loadShellEnv } from "../service/shell-env"
 import { registerRendererProtocol, setDockIcon, setProtocolReporter } from "../windows"
@@ -56,6 +57,16 @@ export const prepareDesktop = Effect.gen(function* () {
 
 export const loadProxyEnvironment = Effect.gen(function* () {
   yield* Effect.try(() => {
+    // A GUI-launched process inherits no shell environment, so a system-configured VPN or proxy
+    // would otherwise be invisible. Discovery fills the standard variables before the background
+    // service is spawned and inherits them, and before Node's http module picks them up below.
+    // Explicit environment variables always win over the OS settings.
+    const systemProxy = discoverSystemProxy()
+    if (systemProxy) {
+      if (systemProxy.http && !process.env.HTTP_PROXY && !process.env.http_proxy) process.env.HTTP_PROXY = systemProxy.http
+      if (systemProxy.https && !process.env.HTTPS_PROXY && !process.env.https_proxy) process.env.HTTPS_PROXY = systemProxy.https
+      if (systemProxy.noProxy) mergeNoProxy(systemProxy.noProxy)
+    }
     ensureLoopbackNoProxy()
     // SAFETY: Electron 41.2 ships a Node with http.setGlobalProxyFromEnv, which the current @types/node lacks.
     const proxyAwareHttp = http as typeof http & { setGlobalProxyFromEnv(): void }
@@ -72,9 +83,13 @@ const loadSystemCertificates = Effect.try({
 
 // Bun reads lowercase `no_proxy` alone whenever it is set, so both spellings get the same merged list.
 function ensureLoopbackNoProxy() {
+  mergeNoProxy("127.0.0.1,localhost,::1")
+}
+
+function mergeNoProxy(entries: string) {
   const noProxy = [
     ...new Set(
-      [process.env.NO_PROXY, process.env.no_proxy, "127.0.0.1,localhost,::1"].flatMap((value) =>
+      [process.env.NO_PROXY, process.env.no_proxy, entries].flatMap((value) =>
         (value ?? "").split(",").flatMap((entry) => entry.trim() || []),
       ),
     ),

@@ -11,6 +11,7 @@ import { Updater } from "./services/updater"
 import { OPENCODE_ARTIFACT, OPENCODE_CHANNEL, OPENCODE_LOCAL, OPENCODE_VERSION } from "./version"
 import { LayerNode } from "@opencode/util/effect/layer-node"
 import { Global } from "@opencode/util/global"
+import { discoverSystemProxy } from "@opencode/util/proxy-discovery"
 import { AppProcess } from "@opencode/util/process"
 import { Config } from "./config"
 import { Npm } from "@opencode/util/npm"
@@ -21,13 +22,27 @@ import { ShutdownDeadline } from "./shutdown-deadline"
 
 // Keep requests to the local service off any proxy. Bun reads lowercase `no_proxy` alone whenever it is set, so both
 // spellings get the same merged list.
-const noProxy = [
+const noProxyList = [
   ...new Set(
     [process.env.NO_PROXY, process.env.no_proxy, "127.0.0.1,localhost,::1"].flatMap((value) =>
       (value ?? "").split(",").flatMap((entry) => entry.trim() || []),
     ),
   ),
-].join(",")
+]
+
+// A process launched from the desktop or a GUI has no shell environment, so a system-configured VPN
+// or proxy would be invisible. Discovery fills the standard variables before any request runs and
+// before the background service is spawned and inherits them; explicit environment variables and
+// service env (`opencode service set env HTTPS_PROXY <url>`) always win over the OS settings.
+const systemProxy = discoverSystemProxy()
+if (systemProxy) {
+  if (systemProxy.http && !process.env.HTTP_PROXY && !process.env.http_proxy) process.env.HTTP_PROXY = systemProxy.http
+  if (systemProxy.https && !process.env.HTTPS_PROXY && !process.env.https_proxy) process.env.HTTPS_PROXY = systemProxy.https
+  if (systemProxy.noProxy)
+    noProxyList.push(...systemProxy.noProxy.split(",").flatMap((entry) => entry.trim() || []))
+}
+
+const noProxy = [...new Set(noProxyList)].join(",")
 
 process.env.NO_PROXY = noProxy
 process.env.no_proxy = noProxy
