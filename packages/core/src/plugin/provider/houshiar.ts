@@ -80,24 +80,22 @@ export const HoushiarPlugin = define({
       (event) =>
         Effect.gen(function* () {
           if (event.kind !== "primary") return
-          const session = yield* ctx.session.get({ sessionID: event.sessionID })
-          const conversationID = session.metadata?.houshiarConversationID
-          event.options = {
-            ...event.options,
-            http: {
-              ...event.options.http,
-              body: {
-                ...event.options.http?.body,
-                ...(conversationID ? { conversation_id: conversationID } : { memory_enabled: true }),
-              },
-              headers: {
-                ...event.options.http?.headers,
-                ...(conversationID ? { "X-Conversation-ID": conversationID } : {}),
-                ...(typeof session.metadata?.houshiarServerRevision === "number"
-                  ? { "X-Memory-Revision": String(session.metadata.houshiarServerRevision) }
-                  : {}),
-              },
-            },
+          // Attaching the conversation identity is best-effort: a failed lookup must not fail the call.
+          const metadata = yield* ctx.session
+            .get({ sessionID: event.sessionID })
+            .pipe(
+              Effect.map((session) => session.metadata),
+              Effect.catch(() => Effect.succeed(undefined)),
+            )
+          const conversationID =
+            typeof metadata?.houshiarConversationID === "string" ? metadata.houshiarConversationID : undefined
+          if (!conversationID && typeof metadata?.houshiarServerRevision !== "number") return
+          event.headers = {
+            ...event.headers,
+            ...(conversationID ? { "X-Conversation-ID": conversationID } : {}),
+            ...(typeof metadata?.houshiarServerRevision === "number"
+              ? { "X-Memory-Revision": String(metadata.houshiarServerRevision) }
+              : {}),
           }
         }),
       { providerID: Provider.ID.make(Houshiar.id) },
@@ -109,11 +107,19 @@ export const HoushiarPlugin = define({
           if (event.kind !== "primary") return
           const conversationID = event.response.headers.get("X-Conversation-ID")
           if (!conversationID) return
-          const session = yield* ctx.session.get({ sessionID: event.sessionID })
-          yield* ctx.session.update({
-            sessionID: event.sessionID,
-            metadata: { ...(session.metadata ?? {}), houshiarConversationID: conversationID },
-          })
+          // Persisting the conversation identity is best-effort: a failed update must not fail the
+          // model call that produced the response.
+          yield* ctx.session
+            .get({ sessionID: event.sessionID })
+            .pipe(
+              Effect.flatMap((session) =>
+                ctx.session.update({
+                  sessionID: event.sessionID,
+                  metadata: { ...(session.metadata ?? {}), houshiarConversationID: conversationID },
+                }),
+              ),
+              Effect.catchCause((cause) => Effect.logWarning("failed to persist Houshiar conversation ID", { cause })),
+            )
         }),
       { providerID: Provider.ID.make(Houshiar.id) },
     )

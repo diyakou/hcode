@@ -51,15 +51,12 @@ const Usage = Schema.Struct({
 export const models = Effect.fn("Houshiar.models")(function* (
   http: HttpClient.HttpClient,
   key: string,
-  limitsOrUsage?: (typeof Usage.Type)["limits"] | typeof Usage.Type,
+  usage?: typeof Usage.Type,
 ) {
-  const limits = limitsOrUsage && "limits" in limitsOrUsage ? limitsOrUsage.limits : limitsOrUsage
   const planContextLimit =
-    (limitsOrUsage && "context_limit" in limitsOrUsage
-      ? limitsOrUsage.context_limit ?? limitsOrUsage.context?.limit
-      : undefined) ?? limits?.max_context_tokens
-  const maxContext = planContextLimit || limits?.max_context_tokens || Infinity
-  const maxOutput = limits?.max_output_tokens || Infinity
+    (usage?.context_limit ?? usage?.context?.limit) ?? usage?.limits?.max_context_tokens
+  const maxContext = planContextLimit || usage?.limits?.max_context_tokens || Infinity
+  const maxOutput = usage?.limits?.max_output_tokens || Infinity
   const response = yield* HttpClient.filterStatusOk(http)
     .execute(HttpClientRequest.get(`${Houshiar.baseURL}/models`).pipe(HttpClientRequest.bearerToken(key)))
     .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Catalog)), Effect.timeout("20 seconds"))

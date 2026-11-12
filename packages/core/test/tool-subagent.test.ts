@@ -218,12 +218,13 @@ const withSubagent = (location: Location.Ref) =>
   })
 
 describe("SubagentTool", () => {
-  it("instructs the parent to assign disjoint scopes and avoid duplicating child work", () => {
-    expect(SubagentTool.description).toContain("exclusive file or topic ownership")
-    expect(SubagentTool.description).toContain("do not work on a subagent-owned scope until it finishes")
-    expect(SubagentTool.description).toContain("Keep integration and final verification in the parent session")
-    expect(SubagentTool.description).toContain("Proactively use subagents")
-  })
+  it.effect("instructs the parent to assign disjoint scopes and avoid duplicating child work", () =>
+    Effect.sync(() => {
+      expect(SubagentTool.description).toContain("exclusive file or topic ownership")
+      expect(SubagentTool.description).toContain("do not work on a subagent-owned scope until it finishes")
+      expect(SubagentTool.description).toContain("Keep integration and final verification in the parent session")
+      expect(SubagentTool.description).toContain("Proactively use subagents")
+    }))
 
   completionIt.live("admits one durable completion across live delivery and restart replay", () =>
     Effect.acquireRelease(

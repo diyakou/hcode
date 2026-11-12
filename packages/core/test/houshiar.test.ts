@@ -54,13 +54,22 @@ it.effect("caps model windows and reply limits at the plan limits without enlarg
     )
     yield* Effect.forEach(
       [
-        { limits: undefined, expected: { context: 16000, output: 2000 } },
-        { limits: { max_context_tokens: 0, max_output_tokens: 0 }, expected: { context: 16000, output: 2000 } },
-        { limits: { max_context_tokens: 8000, max_output_tokens: 1000 }, expected: { context: 8000, output: 1000 } },
-        { limits: { max_context_tokens: 32000, max_output_tokens: 4000 }, expected: { context: 16000, output: 2000 } },
+        { usage: undefined, expected: { context: 16000, output: 2000 } },
+        {
+          usage: { authenticated: true, limits: { max_context_tokens: 0, max_output_tokens: 0 } },
+          expected: { context: 16000, output: 2000 },
+        },
+        {
+          usage: { authenticated: true, limits: { max_context_tokens: 8000, max_output_tokens: 1000 } },
+          expected: { context: 8000, output: 1000 },
+        },
+        {
+          usage: { authenticated: true, limits: { max_context_tokens: 32000, max_output_tokens: 4000 } },
+          expected: { context: 16000, output: 2000 },
+        },
       ],
       (item) =>
-        HoushiarGateway.models(http, "user-key", item.limits).pipe(
+        HoushiarGateway.models(http, "user-key", item.usage).pipe(
           Effect.map((models) => expect(models[0].limit).toEqual(item.expected)),
         ),
     )
