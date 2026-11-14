@@ -71,7 +71,7 @@ export const useComposerCommands = (input: { model?: ModelSelection } = {}) => {
 
   const viewUsage = async () => {
     const { HoushiarUsageDialog } = await import("@/usage/houshiar")
-    void dialog.show(() => <HoushiarUsageDialog location={workspace().ref} />)
+    void dialog.show(() => <HoushiarUsageDialog location={workspace().ref} model={model} />)
   }
 
   command.register("composer", () => [

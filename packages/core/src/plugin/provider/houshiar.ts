@@ -2,7 +2,7 @@ import { define } from "@opencode/plugin/effect/plugin"
 import { Houshiar } from "@opencode/schema/houshiar"
 import { Integration } from "@opencode/schema/integration"
 import type { Model } from "@opencode/schema/model"
-import { Duration, Effect } from "effect"
+import { Duration, Effect, Option, Schema } from "effect"
 import { HttpClient, HttpClientError } from "effect/http"
 import { HoushiarGateway } from "../../houshiar.js"
 import { IntegrationConnection } from "../../integration/connection.js"
@@ -10,6 +10,8 @@ import { Provider } from "../../provider.js"
 import { SharedCache } from "../../shared-cache.js"
 import type { PluginInternal } from "../internal.js"
 import { ProviderRefresh } from "./refresh.js"
+
+const decodeBody = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Json)))
 
 export const HoushiarPlugin = define({
   id: "houshiar.provider",
@@ -75,6 +77,48 @@ export const HoushiarPlugin = define({
       }),
     })
 
+    yield* ctx.session.hook(
+      "http.request",
+      (event) =>
+        Effect.gen(function* () {
+          if (event.kind !== "primary") return
+          const session = yield* ctx.session.get({ sessionID: event.sessionID }).pipe(Effect.orDie)
+          const conversationID = session.metadata?.houshiarConversationID
+          const body = Option.getOrUndefined(decodeBody(yield* Effect.promise(() => event.request.clone().text())))
+          if (!body) return
+          const headers = new Headers(event.request.headers)
+          headers.delete("content-length")
+          if (conversationID) headers.set("X-Conversation-ID", String(conversationID))
+          if (typeof session.metadata?.houshiarServerRevision === "number")
+            headers.set("X-Memory-Revision", String(session.metadata.houshiarServerRevision))
+          event.request = new Request(event.request, {
+            headers,
+            body: JSON.stringify({
+              ...body,
+              ...(conversationID ? { conversation_id: conversationID } : { memory_enabled: true }),
+            }),
+          })
+        }),
+      { providerID: Provider.ID.make(Houshiar.id) },
+    )
+    yield* ctx.session.hook(
+      "http.response",
+      (event) =>
+        Effect.gen(function* () {
+          if (event.kind !== "primary") return
+          const conversationID = event.response.headers.get("X-Conversation-ID")
+          if (!conversationID) return
+          const session = yield* ctx.session.get({ sessionID: event.sessionID }).pipe(Effect.orDie)
+          yield* ctx.session
+            .update({
+              sessionID: event.sessionID,
+              metadata: { ...(session.metadata ?? {}), houshiarConversationID: conversationID },
+            })
+            .pipe(Effect.orDie)
+        }),
+      { providerID: Provider.ID.make(Houshiar.id) },
+    )
+
     yield* ctx.provider.transform((providers) => {
       for (const item of providers.list()) providers.remove(item.provider.id)
       providers.add({
@@ -114,6 +158,17 @@ export const HoushiarPlugin = define({
               context.error(
                 "unavailable",
                 "Unable to load Houshiar usage. Check your API key and connection.",
+                "usage_unavailable",
+              ),
+            ),
+          ),
+        fiveHour: (input, context) =>
+          key().pipe(
+            Effect.flatMap((access) => HoushiarGateway.fiveHour(http, access.key, input.model)),
+            Effect.mapError(() =>
+              context.error(
+                "unavailable",
+                "Unable to load Houshiar five-hour usage. Check your API key and connection.",
                 "usage_unavailable",
               ),
             ),

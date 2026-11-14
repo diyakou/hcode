@@ -53,11 +53,9 @@ export const models = Effect.fn("Houshiar.models")(function* (
   key: string,
   limitsOrUsage?: (typeof Usage.Type)["limits"] | typeof Usage.Type,
 ) {
-  const limits = limitsOrUsage && "limits" in limitsOrUsage ? limitsOrUsage.limits : limitsOrUsage
-  const planContextLimit =
-    (limitsOrUsage && "context_limit" in limitsOrUsage
-      ? limitsOrUsage.context_limit ?? limitsOrUsage.context?.limit
-      : undefined) ?? limits?.max_context_tokens
+  const usage = limitsOrUsage && "authenticated" in limitsOrUsage ? limitsOrUsage : undefined
+  const limits = limitsOrUsage && "authenticated" in limitsOrUsage ? limitsOrUsage.limits : limitsOrUsage
+  const planContextLimit = usage?.context_limit ?? usage?.context?.limit ?? limits?.max_context_tokens
   const maxContext = planContextLimit || limits?.max_context_tokens || Infinity
   const maxOutput = limits?.max_output_tokens || Infinity
   const response = yield* HttpClient.filterStatusOk(http)
@@ -102,6 +100,16 @@ export const models = Effect.fn("Houshiar.models")(function* (
       ]
     })
     .toSorted((a, b) => a.id.localeCompare(b.id))
+})
+
+export const fiveHour = Effect.fn("Houshiar.fiveHour")(function* (http: HttpClient.HttpClient, key: string, model?: string) {
+  const request = HttpClientRequest.get(`${Houshiar.baseURL}/usage/five-hour`).pipe(
+    HttpClientRequest.bearerToken(key),
+  )
+  const response = yield* HttpClient.filterStatusOk(http)
+    .execute(model ? HttpClientRequest.setUrlParam(request, "model", model) : request)
+    .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Houshiar.FiveHourStatus)), Effect.timeout("20 seconds"))
+  return response
 })
 
 export const usage = Effect.fn("Houshiar.usage")(function* (http: HttpClient.HttpClient, key: string) {

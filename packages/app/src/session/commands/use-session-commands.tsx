@@ -355,6 +355,22 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     })
   }
 
+  const scheduleTask = () => {
+    if (!actions.session.identity.params.id) return
+    void openDialog(
+      () => import("@/session/commands/task-dialog"),
+      (x) => dialog.show(() => <x.DialogTask mode="later" />),
+    )
+  }
+
+  const runTask = () => {
+    if (!actions.session.identity.params.id) return
+    void openDialog(
+      () => import("@/session/commands/task-dialog"),
+      (x) => dialog.show(() => <x.DialogTask mode="now" />),
+    )
+  }
+
   const fork = () => {
     const sessionID = actions.session.identity.params.id
 
@@ -395,6 +411,22 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       slash: "compact",
       disabled: !actions.session.identity.params.id || actions.session.history.visibleUserMessages().length === 0,
       onSelect: compact,
+    }),
+    sessionCommand({
+      id: "session.runTask",
+      title: language.t("task.schedule.run.title"),
+      description: language.t("task.schedule.run.description"),
+      slash: "delegate",
+      disabled: !actions.session.identity.params.id,
+      onSelect: runTask,
+    }),
+    sessionCommand({
+      id: "session.scheduleTask",
+      title: language.t("task.schedule.title"),
+      description: language.t("task.schedule.description"),
+      slash: "task",
+      disabled: !actions.session.identity.params.id,
+      onSelect: scheduleTask,
     }),
     sessionCommand({
       id: "session.background",

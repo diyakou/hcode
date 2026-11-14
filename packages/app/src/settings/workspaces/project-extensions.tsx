@@ -289,12 +289,11 @@ export const ProjectSettingsExtensions: Component<{
     setSkillSourcePending(true)
     setSkillSourceError(undefined)
     try {
-      const result = await serverSDK.api.config.skillSource({
+      await serverSDK.api.experimental.config.skillSource({
         directory,
         skill,
         add: true,
       })
-      if (result.error) throw result.error
       setSkillPath("")
       await data.location.skill.sync({ directory })
     } catch (error) {
@@ -349,12 +348,11 @@ export const ProjectSettingsExtensions: Component<{
                 setSkillSourcePending(true)
                 setSkillSourceError(undefined)
                 try {
-                  const result = await serverSDK.api.config.skillSource({
+                  await serverSDK.api.experimental.config.skillSource({
                     directory: directorySDK().directory,
-                    skill: item.location,
+                    skill: item.path.replace(/[\\/][^\\/]+$/, ""),
                     add: false,
                   })
-                  if (result.error) throw result.error
                   await data.location.skill.sync({ directory: directorySDK().directory })
                 } catch (error) {
                   setSkillSourceError(error instanceof Error ? error.message : String(error))
@@ -457,7 +455,7 @@ export const ProjectSettingsExtensions: Component<{
                     }}
                   />
                   <Button
-                    variant="secondary"
+                    variant="neutral"
                     disabled={skillSourcePending() || !skillPath().trim()}
                     onClick={() => void addSkillSource()}
                   >
