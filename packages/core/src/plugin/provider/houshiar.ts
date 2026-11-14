@@ -82,15 +82,19 @@ export const HoushiarPlugin = define({
       (event) =>
         Effect.gen(function* () {
           if (event.kind !== "primary") return
-          const session = yield* ctx.session.get({ sessionID: event.sessionID }).pipe(Effect.orDie)
-          const conversationID = session.metadata?.houshiarConversationID
+          const metadata = yield* ctx.session.get({ sessionID: event.sessionID }).pipe(
+            Effect.map((session) => session.metadata),
+            Effect.catch(() => Effect.succeed(undefined)),
+          )
+          const conversationID =
+            typeof metadata?.houshiarConversationID === "string" ? metadata.houshiarConversationID : undefined
           const body = Option.getOrUndefined(decodeBody(yield* Effect.promise(() => event.request.clone().text())))
           if (!body) return
           const headers = new Headers(event.request.headers)
           headers.delete("content-length")
-          if (conversationID) headers.set("X-Conversation-ID", String(conversationID))
-          if (typeof session.metadata?.houshiarServerRevision === "number")
-            headers.set("X-Memory-Revision", String(session.metadata.houshiarServerRevision))
+          if (conversationID) headers.set("X-Conversation-ID", conversationID)
+          if (typeof metadata?.houshiarServerRevision === "number")
+            headers.set("X-Memory-Revision", String(metadata.houshiarServerRevision))
           event.request = new Request(event.request, {
             headers,
             body: JSON.stringify({
@@ -108,13 +112,19 @@ export const HoushiarPlugin = define({
           if (event.kind !== "primary") return
           const conversationID = event.response.headers.get("X-Conversation-ID")
           if (!conversationID) return
-          const session = yield* ctx.session.get({ sessionID: event.sessionID }).pipe(Effect.orDie)
+          // Persisting the conversation identity is best-effort: a failed update must not fail the
+          // model call that produced the response.
           yield* ctx.session
-            .update({
-              sessionID: event.sessionID,
-              metadata: { ...(session.metadata ?? {}), houshiarConversationID: conversationID },
-            })
-            .pipe(Effect.orDie)
+            .get({ sessionID: event.sessionID })
+            .pipe(
+              Effect.flatMap((session) =>
+                ctx.session.update({
+                  sessionID: event.sessionID,
+                  metadata: { ...(session.metadata ?? {}), houshiarConversationID: conversationID },
+                }),
+              ),
+              Effect.catchCause((cause) => Effect.logWarning("failed to persist Houshiar conversation ID", { cause })),
+            )
         }),
       { providerID: Provider.ID.make(Houshiar.id) },
     )

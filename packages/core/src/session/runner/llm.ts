@@ -338,9 +338,10 @@ const layer = Layer.effect(
             if (fallbackModels.length > 0 || fallbackAuto) {
               const available = yield* models.available()
               const candidates = [
-                ...fallbackModels.flatMap((selection) =>
-                  available.filter((item) => item.providerID === selection.providerID && item.id === selection.model),
-                ),
+                ...fallbackModels.flatMap((selection) => {
+                  const [providerID, modelID] = [selection.providerID, selection.model]
+                  return available.filter((item) => item.providerID === providerID && item.id === modelID)
+                }),
                 ...(fallbackAuto ? available : []),
               ].filter(
                 (candidate, index, all) =>

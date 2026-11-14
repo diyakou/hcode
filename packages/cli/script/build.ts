@@ -115,6 +115,35 @@ const pluginRuntimePlugin: BunPlugin = {
   },
 }
 
+// `@effect/platform-node-shared/NodeWS` is a bare `export * from "ws"`. Bundling a star re-export of a CommonJS
+// package leaves the emitted namespace (`__reExport(target, ws)`) referencing an undefined binding once `splitting`
+// is on, so every WebSocket upgrade throws `ReferenceError: <id> is not defined` (HTTP 500, terminals never attach).
+// Re-export the `ws` surface by name instead, which bundles correctly.
+const nodeWsPlugin: BunPlugin = {
+  name: "effect-node-ws-star-reexport",
+  setup(build) {
+    build.onLoad({ filter: /platform-node-shared[/\\]dist[/\\]NodeWS\.js$/ }, () => ({
+      loader: "js",
+      contents: `import * as ws from "ws"
+export default ws.default ?? ws
+export const CONNECTING = ws.CONNECTING
+export const OPEN = ws.OPEN
+export const CLOSING = ws.CLOSING
+export const CLOSED = ws.CLOSED
+export const WebSocket = ws.WebSocket
+export const WebSocketServer = ws.WebSocketServer
+export const createWebSocketStream = ws.createWebSocketStream
+export const Receiver = ws.Receiver
+export const Sender = ws.Sender
+export const Server = ws.Server
+export const PerMessageDeflate = ws.PerMessageDeflate
+export const extension = ws.extension
+export const subprotocol = ws.subprotocol
+`,
+    }))
+  },
+}
+
 for (const item of targets) {
   const opencodePty = await resolveOpencodePty({
     platform: item.os,
@@ -168,6 +197,7 @@ export default { path: file, version: ${JSON.stringify(opencodePty.version)}, sh
       pluginRuntimePlugin,
       simulationGraphPlugin,
       modelsSnapshot,
+      nodeWsPlugin,
     ],
     external: ["node-gyp"],
     format: "esm",

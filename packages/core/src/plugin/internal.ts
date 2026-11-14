@@ -111,6 +111,8 @@ import { VcsGitPlugin } from "./vcs/git.js"
 import { VerbosityPlugin } from "./verbosity.js"
 import { WarmingPlugin } from "./warming.js"
 import { WellKnownPlugin } from "../wellknown/plugin.js"
+import { fromPromise } from "./promise.js"
+import FigmaPlugin from "@opencode/plugin-figma"
 
 const services = [
   Agent.Service,
@@ -285,6 +287,8 @@ const post = [
   DynamicProviderPlugin,
   ConfigWebSearchPlugin.Plugin,
   HoushiarPlugin,
+  // The Figma integration ships built-in: it registers the official remote MCP server and skills.
+  fromPromise(FigmaPlugin),
   ConfigPolicyPlugin.Plugin,
 ] as const satisfies readonly InternalPlugin[]
 

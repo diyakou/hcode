@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect } from "bun:test"
 import { Deferred, Effect, Fiber, Layer, Schema, Stream } from "effect"
 import { LanguageModel } from "@opencode/ai/effect"
 import { OpenAIChat } from "@opencode/ai/protocols"
@@ -218,12 +218,13 @@ const withSubagent = (location: Location.Ref) =>
   })
 
 describe("SubagentTool", () => {
-  test("instructs the parent to assign disjoint scopes and avoid duplicating child work", () => {
-    expect(SubagentTool.description).toContain("exclusive file or topic ownership")
-    expect(SubagentTool.description).toContain("do not work on a subagent-owned scope until it finishes")
-    expect(SubagentTool.description).toContain("Keep integration and final verification in the parent session")
-    expect(SubagentTool.description).toContain("Proactively use subagents")
-  })
+  it.effect("instructs the parent to assign disjoint scopes and avoid duplicating child work", () =>
+    Effect.sync(() => {
+      expect(SubagentTool.description).toContain("exclusive file or topic ownership")
+      expect(SubagentTool.description).toContain("do not work on a subagent-owned scope until it finishes")
+      expect(SubagentTool.description).toContain("Keep integration and final verification in the parent session")
+      expect(SubagentTool.description).toContain("Proactively use subagents")
+    }))
 
   completionIt.live("admits one durable completion across live delivery and restart replay", () =>
     Effect.acquireRelease(
