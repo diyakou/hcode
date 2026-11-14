@@ -227,3 +227,116 @@ it.effect("records the cost the endpoint reports instead of the catalog price", 
     expect(yield* db.select().from(SessionTable).where(eq(SessionTable.id, sessionID)).get()).toMatchObject({ cost: 0 })
   }),
 )
+
+for (const fixture of [
+  { name: "empty", provider: "houshiar", events: [], retry: true, expected: "Retry" },
+  {
+    name: "empty text blocks",
+    provider: "houshiar",
+    events: [LLMEvent.textStart({ id: "text" }), LLMEvent.textEnd({ id: "text" })],
+    retry: true,
+    expected: "Retry",
+  },
+  { name: "exhausted", provider: "houshiar", events: [], retry: false, expected: "Failed" },
+  { name: "other provider", provider: "test", events: [], retry: true, expected: "Completed" },
+  {
+    name: "text",
+    provider: "houshiar",
+    events: [LLMEvent.textStart({ id: "text" }), LLMEvent.textEnd({ id: "text", text: "hello" })],
+    retry: true,
+    expected: "Completed",
+  },
+  {
+    name: "reasoning",
+    provider: "houshiar",
+    events: [LLMEvent.reasoningStart({ id: "reasoning" }), LLMEvent.reasoningEnd({ id: "reasoning" })],
+    retry: true,
+    expected: "Completed",
+  },
+  {
+    name: "tool",
+    provider: "houshiar",
+    events: [LLMEvent.toolCall({ id: "call", name: "test", input: {} })],
+    retry: true,
+    expected: "Completed",
+  },
+] as const) {
+  it.effect(`handles ${fixture.name} stop response`, () =>
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const llm = yield* TestLLM.Test
+      const sessionID = Session.ID.create()
+      const assistantMessageID = SessionMessage.ID.create()
+      const steps = yield* SessionStep.make.pipe(
+        Effect.provide(
+          Layer.mock(Snapshot.Service)({ capture: () => Effect.succeed(undefined), files: () => Effect.succeed([]) }),
+        ),
+      )
+      yield* db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
+        .run()
+      yield* db
+        .insert(SessionTable)
+        .values({ id: sessionID, project_id: Project.ID.global, slug: "step", directory: "/project", version: "test" })
+        .run()
+      const model = SessionRunnerModel.resolved(
+        LanguageModel.make({ id: "test-model", provider: fixture.provider, route: OpenAIChat.route }),
+        {
+          capabilities: { tools: true, input: ["text"], output: ["text"] },
+          limit: { context: 100_000, output: 1_000 },
+          cost: [],
+        },
+      )
+      yield* llm.push(TestLLM.stop(...fixture.events))
+      let executions = 0
+      let retries = 0
+      const result = yield* steps
+        .attempt({
+          isLocationClosed: () => false,
+          sessionID,
+          assistantMessageID,
+          agent: Agent.defaultID,
+          model,
+          prepared: {
+            retry: () => Effect.void,
+            request: ai.request({ model: model.model, prompt: "Hello" }),
+            options: {},
+            executeTool: () =>
+              Effect.sync(() => {
+                executions++
+                return { content: [{ type: "text", text: "done" }] }
+              }),
+          },
+          retry: (cause, _error, retry) =>
+            Effect.sync(() => {
+              retries++
+              expect(cause.reason._tag).toBe("InvalidProviderOutput")
+              expect(retry).toBe(true)
+              return fixture.retry ? { retry: true as const, attempt: 2, delay: 0 } : { retry: false as const }
+            }),
+          recoverContinuation: true,
+          recoverOverflow: Effect.succeed(false),
+        })
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(result) ? "Failed" : result.value._tag).toBe(fixture.expected)
+      expect(retries).toBe(fixture.expected === "Retry" || fixture.expected === "Failed" ? 1 : 0)
+      expect(executions).toBe(fixture.name === "tool" ? 1 : 0)
+      const events = yield* db
+        .select({ type: EventTable.type })
+        .from(EventTable)
+        .where(eq(EventTable.aggregate_id, sessionID))
+        .orderBy(asc(EventTable.seq))
+        .all()
+      const types = events.map((event) => event.type)
+      expect(types.filter((type) => type === "session.step.ended.1")).toHaveLength(
+        fixture.expected === "Completed" ? 1 : 0,
+      )
+      expect(types.filter((type) => type === "session.step.failed.1")).toHaveLength(
+        fixture.expected === "Failed" ? 1 : 0,
+      )
+      if (fixture.name === "empty text blocks")
+        expect(types.filter((type) => type.startsWith("session.text."))).toHaveLength(0)
+    }),
+  )
+}

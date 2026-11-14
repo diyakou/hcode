@@ -4,6 +4,7 @@ import { Schema } from "effect"
 import { Rpc } from "./rpc.js"
 
 export const id = "houshiar"
+export const auto = "auto"
 // Fixed bootstrap endpoint: the app asks this host for the current gateway domain on every launch.
 export const domainURL = "https://wqai.morvism.ir/domain"
 // Seed and fallback gateway, used when domain resolution is unavailable.

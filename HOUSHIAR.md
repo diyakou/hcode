@@ -11,7 +11,8 @@ The gateway base URL is resolved at startup from `https://wqai.morvism.ir/domain
 - Its `limits.max_context_tokens` and `limits.max_output_tokens` cap the discovered models, so automatic compaction and reply sizing respect the account's plan after model switches. Structured gateway context-limit rejections also trigger the existing overflow compaction recovery.
 - `/usage` opens current account usage in the TUI and graphical app. The graphical app also has a usage button in provider settings.
 - Other model providers are removed after configuration and external provider plugins run. MCP sign-ins remain available.
-- Inventories refresh through the existing account-aware cache, including when the active API key changes. No model names are hardcoded.
+- Inventories refresh through the existing account-aware cache, including when the active API key changes.
+- On an eligible pre-output failure or empty response, Houshiar can retry with a compatible model from the same recognized family and tier. Set `experimental.model_fallback` to `false` to disable model switching.
 - Houshiar retries model discovery every 30 seconds. The new-session screen keeps API connection and model reload actions available; reload forces discovery with the saved key without entering it again.
 
 Use the Bun version pinned in `package.json` and install dependencies with `bun install --frozen-lockfile`.

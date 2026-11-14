@@ -1,6 +1,8 @@
 export * as SessionContext from "./context.js"
 
 import { Model } from "../model.js"
+import { Houshiar } from "@opencode/schema/houshiar"
+import { HoushiarAuto } from "../houshiar-auto.js"
 import { Permission } from "../permission.js"
 import { Context, Effect, Layer } from "effect"
 import { Agent } from "../agent.js"
@@ -89,7 +91,47 @@ const layer = Layer.effect(
     const store = yield* SessionStore.Service
     const registry = yield* Tool.Service
 
-    const resolveModel = (session: SessionSchema.Info) => models.resolve(session, model.available)
+    const resolveModel = Effect.fn("SessionContext.resolveModel")(function* (session: SessionSchema.Info) {
+      const available = yield* model.available()
+      const agent = session.model ? undefined : (yield* agents.select(session.agent)).info?.model
+      const preferred = agent && available.find((item) => item.providerID === agent.providerID && item.id === agent.id)
+      const selected = session.model ?? preferred ?? (yield* model.default())
+      if (selected?.providerID !== Houshiar.id || selected.id !== Houshiar.auto)
+        return yield* models.resolve(session, () => Effect.succeed(available))
+
+      const messages = yield* store.messages({ sessionID: session.id, order: "desc" }).pipe(Effect.orDie)
+      const boundary = messages.findIndex((message) => message.type === "user" || message.type === "synthetic")
+      const prompt = boundary < 0 ? undefined : messages[boundary]
+      const previous = messages
+        .slice(0, boundary < 0 ? messages.length : boundary)
+        .find((message) => message.type === "assistant")
+      const candidates = available.filter((item) => item.providerID === Houshiar.id && item.id !== Houshiar.auto)
+      const active = yield* store.context(session.id).pipe(Effect.orDie)
+      const files = active.flatMap((message) => (message.type === "user" ? message.files ?? [] : []))
+      const compatible = candidates.filter((item) =>
+        files.every((file) => {
+          const modality = file.mime.startsWith("image/")
+            ? "image"
+            : file.mime.startsWith("audio/")
+              ? "audio"
+              : file.mime.startsWith("video/")
+                ? "video"
+                : file.mime === "application/pdf"
+                  ? "pdf"
+                  : undefined
+          return !modality || item.capabilities.input.some((input) => input.startsWith(modality))
+        }),
+      )
+      const prior =
+        previous?.type === "assistant" &&
+        compatible.find((item) => item.providerID === previous.model.providerID && item.id === previous.model.id)
+      const chosen = prior ?? HoushiarAuto.select(compatible, {
+        text: prompt && (prompt.type === "user" || prompt.type === "synthetic") ? prompt.text : "",
+        attachments: prompt?.type === "user" && (prompt.files?.length ?? 0) > 0,
+      })
+      if (!chosen) return yield* new SessionRunnerModel.ModelUnavailableError({ providerID: selected.providerID, modelID: selected.id })
+      return yield* models.resolve({ ...session, model: Model.Ref.make({ providerID: chosen.providerID, id: chosen.id }) }, () => Effect.succeed(available))
+    })
 
     const selectTitle = Effect.fn("SessionContext.selectTitle")(function* (session: SessionSchema.Info) {
       const agent = yield* agents.get(Agent.ID.make("title"))

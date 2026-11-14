@@ -62,6 +62,8 @@ import { Agent } from "@opencode/core/agent"
 import { Config } from "@opencode/core/config"
 import { Document, Info } from "@opencode/schema/config"
 import { ConfigCompaction } from "@opencode/schema/config/compaction"
+import { ConfigExperimental } from "@opencode/schema/config/experimental"
+import { Houshiar } from "@opencode/schema/houshiar"
 import { Tool } from "@opencode/core/tool"
 import type { Info as ToolInfo } from "@opencode/schema/tool"
 import { InstructionStateTable, SessionInboxTable, SessionMessageTable, SessionTable } from "@opencode/core/session/sql"
@@ -219,6 +221,7 @@ const makeRunnerState = (compaction?: SessionRunnerModel.Resolved["compaction"])
     }).pipe(Effect.andThen(Deferred.succeed(barrier.release, undefined)), Effect.asVoid)
   return {
     currentModel: model,
+    availableModels: [] as Model.Info[],
     compaction,
     modelResolveHook: resolvesModel,
     systemBaseline: "Initial context",
@@ -282,6 +285,18 @@ const transformTools = (registry: Tool.Interface, tools: Readonly<Record<string,
   registry.transform((editor) =>
     Object.entries(tools).forEach(([name, tool]) => editor.add({ ...tool, name, options: options ?? tool.options })),
   )
+const runnerConfig = Config.testLayer([
+  new Document({
+    type: "document",
+    info: new Info({
+      compaction: new ConfigCompaction.Info({
+        buffer: 3_000,
+        keep: new ConfigCompaction.Keep({ tokens: 1_000 }),
+      }),
+    }),
+  }),
+])
+
 const layer = Layer.unwrap(
   Effect.map(RunnerState, (state) => {
     const modelTransport = Layer.succeed(
@@ -334,7 +349,12 @@ const layer = Layer.unwrap(
       resolve: (session) =>
         state.modelResolveHook.pipe(
           Effect.map(() => {
-            const selected = session.model?.id === "replacement" ? replacementModel : state.currentModel
+            const selected =
+              session.model?.providerID === Houshiar.id
+                ? LanguageModel.make({ id: session.model.id, provider: Houshiar.id, route: OpenAIChat.route })
+                : session.model?.id === "replacement"
+                  ? replacementModel
+                  : state.currentModel
             return SessionRunnerModel.resolved(selected, {
               capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
               cost: [],
@@ -403,21 +423,10 @@ const layer = Layer.unwrap(
       load: () => Effect.succeed(Instructions.empty),
     })
     const mcpInstructions = Layer.mock(McpInstructions.Service, { load: () => Effect.succeed(Instructions.empty) })
-    const config = Config.testLayer([
-      new Document({
-        type: "document",
-        info: new Info({
-          compaction: new ConfigCompaction.Info({
-            buffer: 3_000,
-            keep: new ConfigCompaction.Keep({ tokens: 1_000 }),
-          }),
-        }),
-      }),
-    ])
     const promptModels = Layer.mock(Model.Service, {
       get: () => Effect.undefined,
       all: () => Effect.succeed([]),
-      available: () => Effect.succeed([]),
+      available: () => Effect.sync(() => state.availableModels),
       default: () => Effect.undefined,
       small: () => Effect.undefined,
     })
@@ -431,7 +440,7 @@ const layer = Layer.unwrap(
       SkillInstructions.node.replace(skillInstructions),
       ReferenceInstructions.node.replace(referenceInstructions),
       Permission.node.replace(permission),
-      Config.node.replace(config),
+      Config.node.replace(runnerConfig),
       PluginSupervisor.node.replace(Layer.empty),
       Plugin.node.replace(Layer.mock(Plugin.Service, { awaitActivation: Effect.suspend(() => state.activationHook) })),
       SessionModelTransport.node.replace(modelTransport),
@@ -507,7 +516,11 @@ const layer = Layer.unwrap(
       ],
     )
   }),
-).pipe(Layer.provideMerge(Layer.sync(RunnerState, makeRunnerState)), Layer.provideMerge(testLLM))
+).pipe(
+  Layer.provideMerge(Layer.sync(RunnerState, makeRunnerState)),
+  Layer.provideMerge(testLLM),
+  Layer.provideMerge(runnerConfig),
+)
 const it = testEffect(layer)
 const sessionID = Session.ID.make("ses_runner_test")
 const otherSessionID = Session.ID.make("ses_runner_other")
@@ -5797,6 +5810,55 @@ describe("SessionRunnerLLM", () => {
     })
   }
 
+  scenario("falls back to a similar Houshiar model when experimental auto fallback is enabled", function* (s) {
+    const config = yield* Config.Test
+    yield* config.setEntries([
+      new Document({
+        type: "document",
+        info: new Info({ experimental: new ConfigExperimental.Info({ model_fallback: true }) }),
+      }),
+    ])
+    const providerID = Provider.ID.make(Houshiar.id)
+    const original = Model.Info.default(providerID, Model.ID.make("claude-sonnet-4"))
+    const alternative = Model.Info.default(providerID, Model.ID.make("claude-sonnet-5"))
+    s.availableModels.push(
+      { ...original, name: "Claude Sonnet 4", enabled: true, limit: defaultModelLimit },
+      { ...alternative, name: "Claude Sonnet 5", enabled: true, limit: defaultModelLimit },
+    )
+    yield* s.bus.publish(SessionEvent.ModelSelected, { sessionID, model: Model.Ref.make({ providerID, id: original.id }) })
+    yield* s.llm.push(Stream.fail(providerUnavailable()), TestLLM.text("Recovered", "fallback-success"))
+    yield* s.runPrompt("Use fallback")
+    expect(s.requests.map((request) => request.model.id)).toEqual([original.id, alternative.id])
+    expect((yield* s.session.get(sessionID)).model).toMatchObject({ providerID, id: alternative.id })
+  })
+
+  scenario("respects explicit false for Houshiar fallback", function* (s) {
+    const config = yield* Config.Test
+    yield* config.setEntries([
+      new Document({
+        type: "document",
+        info: new Info({ experimental: new ConfigExperimental.Info({ model_fallback: false }) }),
+      }),
+    ])
+    const providerID = Provider.ID.make(Houshiar.id)
+    const original = Model.Info.default(providerID, Model.ID.make("claude-sonnet-4"))
+    const alternative = Model.Info.default(providerID, Model.ID.make("claude-sonnet-5"))
+    s.availableModels.push(
+      { ...original, name: "Claude Sonnet 4", enabled: true, limit: defaultModelLimit },
+      { ...alternative, name: "Claude Sonnet 5", enabled: true, limit: defaultModelLimit },
+    )
+    yield* s.bus.publish(SessionEvent.ModelSelected, { sessionID, model: Model.Ref.make({ providerID, id: original.id }) })
+    yield* s.admit("No fallback")
+    yield* s.llm.push(Stream.fail(providerUnavailable()), TestLLM.text("Recovered", "same-model-success"))
+    const scheduled = yield* subscribeRetries(s)
+    const run = yield* s.resume.pipe(Effect.forkChild)
+    yield* Queue.take(scheduled)
+    yield* TestClock.adjust("2400 millis")
+    yield* Fiber.join(run)
+    expect(s.requests.map((request) => request.model.id)).toEqual([original.id, original.id])
+    expect((yield* s.session.get(sessionID)).model).toMatchObject({ providerID, id: original.id })
+  })
+
   scenario("does not start another physical attempt after interruption during retry backoff", function* (s) {
     yield* s.admit("Interrupt retry backoff")
     yield* s.llm.push(Stream.fail(providerUnavailable()), TestLLM.text("Must not run", "unused-retry"))
@@ -7171,6 +7233,4 @@ describe("SessionRunnerLLM", () => {
     const defect = yield* s.resume.pipe(Effect.catchDefect(Effect.succeed))
     expect(defect).toBeInstanceOf(Error)
     if (!(defect instanceof Error)) return
-    expect(defect.message).toBe("Tool input delta before start: call-1")
-  })
-})
+    expect(defect.message).

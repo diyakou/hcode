@@ -61,10 +61,10 @@ export const models = Effect.fn("Houshiar.models")(function* (
   const response = yield* HttpClient.filterStatusOk(http)
     .execute(HttpClientRequest.get(`${baseURL}/models`).pipe(HttpClientRequest.bearerToken(key)))
     .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Catalog)), Effect.timeout("20 seconds"))
-  return response.data
+  const models = response.data
     .flatMap((item) => {
       const remote = Option.getOrUndefined(decodeModel(item))
-      if (!remote) return []
+      if (!remote || remote.id === Houshiar.auto) return []
       const model = Model.Info.default(Provider.ID.make(Houshiar.id), Model.ID.make(remote.id))
       const isClaude = remote.id.toLowerCase().includes("claude")
       const context = Math.min(remote.context_length ?? model.limit.context, maxContext)
@@ -100,6 +100,19 @@ export const models = Effect.fn("Houshiar.models")(function* (
       ]
     })
     .toSorted((a, b) => a.id.localeCompare(b.id))
+  if (models.length === 0) return models
+  const auto = Model.Info.default(Provider.ID.make(Houshiar.id), Model.ID.make(Houshiar.auto))
+  return [
+    {
+      ...auto,
+      name: "Houshiar Auto",
+      limit: {
+        context: Math.min(...models.map((model) => model.limit.context)),
+        output: Math.min(...models.map((model) => model.limit.output)),
+      },
+    },
+    ...models,
+  ]
 })
 
 export const fiveHour = Effect.fn("Houshiar.fiveHour")(function* (
@@ -112,7 +125,7 @@ export const fiveHour = Effect.fn("Houshiar.fiveHour")(function* (
     HttpClientRequest.bearerToken(key),
   )
   const response = yield* HttpClient.filterStatusOk(http)
-    .execute(model ? HttpClientRequest.setUrlParam(request, "model", model) : request)
+    .execute(model && model !== Houshiar.auto && model !== `${Houshiar.id}/${Houshiar.auto}` ? HttpClientRequest.setUrlParam(request, "model", model) : request)
     .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Houshiar.FiveHourStatus)), Effect.timeout("20 seconds"))
   return response
 })
@@ -163,6 +176,4 @@ export function summary(usage: typeof Usage.Type) {
     usage.user_token_balance != null ? `Token balance: ${usage.user_token_balance}` : undefined,
     usage.expires_at ? `Expires: ${usage.expires_at}` : undefined,
   ]
-    .filter((line) => line !== undefined)
-    .join("\n")
-} 
+    .filter((line) => line !== un

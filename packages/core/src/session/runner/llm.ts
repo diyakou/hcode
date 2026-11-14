@@ -1,6 +1,7 @@
 export * as SessionRunnerLLM from "./llm.js"
 
 import { Message } from "@opencode/ai/effect"
+import { Houshiar } from "@opencode/schema/houshiar"
 import { and, desc, eq, inArray, sql } from "drizzle-orm"
 import { Cause, Effect, Exit, FiberMap, Layer } from "effect"
 import { Database } from "../../database/database.js"
@@ -35,6 +36,7 @@ import { ToolOutput } from "../../tool-output.js"
 import { Plugin } from "../../plugin.js"
 import { PluginHooks } from "../../plugin/hooks.js"
 import { MAX_STEPS_PROMPT } from "./max-steps.js"
+import { HoushiarSimilar } from "../../houshiar-similar.js"
 
 const CONTINUE_AFTER_INCOMPLETE_STREAM =
   "The previous response was interrupted. Continue from where you left off without repeating completed content."
@@ -241,16 +243,29 @@ const layer = Layer.effect(
         fallbackConfig === true || fallbackConfig === undefined || fallbackConfig === false
           ? []
           : fallbackConfig.models
+      const originalModel = first.model.ref
       const fallbackAuto =
         fallbackConfig === true ||
-        (typeof fallbackConfig === "object" && fallbackConfig.auto === true)
-      let attemptedModels = new Set<string>()
+        (fallbackConfig !== false &&
+          (typeof fallbackConfig === "object" ? fallbackConfig.auto : undefined) !== false &&
+          (originalModel.providerID === Houshiar.id ||
+            (typeof fallbackConfig === "object" && fallbackConfig.auto === true)))
+      const attemptedModels = new Set<string>()
+      let fallbackModel: Model.Ref | undefined
       let initial: SessionContext.Loaded | undefined = first
       let recoverOverflow = true
       let recoverContinuation = true
       while (true) {
         // Reuse boundary preparation once; retries refresh context without delivering more input.
-        const loaded = initial ?? (yield* prepareContext(sessionID).pipe(Effect.flatMap(context.load)))
+        const loaded =
+          initial ??
+          (yield* prepareContext(sessionID).pipe(
+            Effect.flatMap((selected) =>
+              context.load(
+                fallbackModel ? { ...selected, session: { ...selected.session, model: fallbackModel } } : selected,
+              ),
+            ),
+          ))
         initial = undefined
         const modelKey = `${loaded.model.ref.providerID}/${loaded.model.ref.id}`
         attemptedModels.add(modelKey)
@@ -325,6 +340,19 @@ const layer = Layer.effect(
               : Effect.succeed(false),
           ),
         })
+        if (
+          fallbackModel &&
+          (outcome._tag === "Completed" || outcome._tag === "OutputLimit" || outcome._tag === "Continue")
+        ) {
+          const session = yield* store.get(sessionID)
+          if (session && !(session.model?.providerID === Houshiar.id && session.model.id === Houshiar.auto))
+            yield* bus.publish(SessionEvent.ModelSelected, {
+              sessionID,
+              model: fallbackModel,
+              previous: session.model,
+            })
+          fallbackModel = undefined
+        }
         const completed = yield* SessionStep.Outcome.$match(outcome, {
           Completed: Effect.fnUntraced(function* (outcome) {
             // The Session is about to go idle, which leaves the background summary time to finish.
@@ -337,25 +365,35 @@ const layer = Layer.effect(
           Retry: Effect.fnUntraced(function* (outcome) {
             if (fallbackModels.length > 0 || fallbackAuto) {
               const available = yield* models.available()
+              const original = available.find(
+                (item) => item.providerID === originalModel.providerID && item.id === originalModel.id,
+              )
               const candidates = [
                 ...fallbackModels.flatMap((selection) => {
                   const [providerID, modelID] = [selection.providerID, selection.model]
                   return available.filter((item) => item.providerID === providerID && item.id === modelID)
                 }),
-                ...(fallbackAuto ? available : []),
+                ...(fallbackAuto
+                  ? originalModel.providerID === Houshiar.id
+                    ? original && attemptedModels.size < 3
+                      ? HoushiarSimilar.select(original, available)
+                      : []
+                    : available
+                  : []),
               ].filter(
                 (candidate, index, all) =>
+                  !(candidate.providerID === Houshiar.id && candidate.id === Houshiar.auto) &&
                   !attemptedModels.has(`${candidate.providerID}/${candidate.id}`) &&
                   all.findIndex((item) => item.providerID === candidate.providerID && item.id === candidate.id) === index,
               )
               const candidate = candidates[0]
               if (candidate) {
-                const next = Model.Ref.make({ providerID: candidate.providerID, id: candidate.id })
+                fallbackModel = Model.Ref.make({ providerID: candidate.providerID, id: candidate.id })
                 attemptedModels.add(`${candidate.providerID}/${candidate.id}`)
-                yield* bus.publish(SessionEvent.ModelSelected, {
+                yield* bus.publish(SessionEvent.Step.Failed, {
                   sessionID,
-                  model: next,
-                  previous: loaded.model.ref,
+                  assistantMessageID,
+                  error: outcome.error,
                 })
                 assistantMessageID = SessionMessage.ID.create()
                 return

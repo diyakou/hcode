@@ -10,6 +10,7 @@ import {
   type ToolCall,
 } from "@opencode/ai/effect"
 import type { Agent } from "@opencode/schema/agent"
+import { Houshiar } from "@opencode/schema/houshiar"
 import { Cause, Clock, Data, Effect, Exit, Fiber, Option, Stream } from "effect"
 import { SessionError } from "@opencode/schema/session-error"
 import { Bus } from "../../bus.js"
@@ -103,6 +104,13 @@ export const make = Effect.gen(function* () {
     // Provider and tool fibers retain per-source order without a shared writer queue.
     // A local execution starts only after its Tool.Called publication completes.
     let overflowFailure: ProviderErrorEvent | undefined
+    // Keep empty text blocks out of durable history until we know whether this attempt can retry.
+    const pending: LLMEvent[] = []
+    let checkingEmpty = input.model.ref.providerID === Houshiar.id
+    const flushPending = Effect.fnUntraced(function* () {
+      for (const event of pending) yield* publisher.publish(event)
+      pending.length = 0
+    })
     // Read to the end, not just the finish event, so the next request can reuse this response.
     const providerStream = llm.stream(input.prepared.request, input.prepared.options).pipe(
       Stream.runForEach((event) =>
@@ -117,6 +125,24 @@ export const make = Effect.gen(function* () {
           ) {
             overflowFailure = event
             return
+          }
+          if (checkingEmpty) {
+            if (event.type === "text-start" || event.type === "text-delta" || event.type === "text-end") {
+              pending.push(event)
+              if (("text" in event && event.text) || event.providerMetadata) {
+                checkingEmpty = false
+                yield* flushPending()
+              }
+              return
+            }
+            if (event.type !== "step-start" && event.type !== "finish" && event.type !== "step-finish") {
+              checkingEmpty = false
+              yield* flushPending()
+            }
+            if (event.type === "step-finish" && event.reason.normalized !== "stop") {
+              checkingEmpty = false
+              yield* flushPending()
+            }
           }
           yield* publisher.publish(event)
           if (event.type !== "tool-call" || event.providerExecuted) return
@@ -143,6 +169,16 @@ export const make = Effect.gen(function* () {
         const stream = yield* restore(providerStream).pipe(Effect.exit)
         const streamFailure = Option.getOrUndefined(Exit.findErrorOption(stream))
         const streamInterrupted = Exit.hasInterrupts(stream)
+        const emptyFinish = pending.find((event) => event.type === "step-finish" && event.reason.normalized === "stop")
+        const emptyStop = checkingEmpty && Exit.isSuccess(stream) && !publisher.hasProviderError() && emptyFinish
+        if (emptyStop) {
+          yield* publisher.publish(emptyStop)
+          pending.length = 0
+        }
+        if (!emptyStop && pending.length > 0) {
+          yield* flushPending()
+          yield* publisher.flush()
+        }
         // Cancelled before the start snapshot existed: record nothing, as when the capture preceded the request.
         if (
           Exit.isFailure(stream) &&
@@ -182,7 +218,15 @@ export const make = Effect.gen(function* () {
                 }),
               })
             : undefined
-        const llmFailure = streamFailure instanceof AIError ? streamFailure : unknownFinish
+        const emptyFailure = emptyStop
+          ? new AIError({
+              reason: new InvalidProviderOutputError({
+                message: "The provider returned an empty response.",
+                classification: "incomplete-stream",
+              }),
+            })
+          : undefined
+        const llmFailure = streamFailure instanceof AIError ? streamFailure : (unknownFinish ?? emptyFailure)
         const llmError = llmFailure && !recorded.providerFailed ? toSessionError(llmFailure) : undefined
         if (
           input.recoverContinuation &&

@@ -1,3 +1,4 @@
+import { Houshiar } from "@opencode/schema/houshiar"
 import { createSimpleContext } from "@opencode/ui/context"
 import { base64Encode } from "@opencode/util/encode"
 import { useParams } from "@solidjs/router"
@@ -204,7 +205,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       }
     }
 
-    const fallback = createMemo(() => firstModel(configuredModel, recentModel, defaultModel))
+    const fallback = createMemo(() =>
+      firstModel(configuredModel, () => ({ providerID: Houshiar.id, modelID: Houshiar.auto }), recentModel, defaultModel),
+    )
 
     const durable = () => {
       const session = id()
@@ -589,3 +592,4 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
 export type ModelSelection = Omit<ReturnType<typeof useLocal>["model"], "trackSessionCommit" | "preview"> &
   Partial<Pick<ReturnType<typeof useLocal>["model"], "trackSessionCommit" | "preview">>
+       

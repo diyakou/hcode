@@ -1,3 +1,4 @@
+import { Houshiar } from "@opencode/schema/houshiar"
 import { batch, createEffect, createMemo, on } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { ComposerControls } from "./adapter"
@@ -164,9 +165,14 @@ export function createComposerModelSelection(input: {
   const key = () => {
     if (!configuredModel.ready()) return
 
-    return [prompt.model.current(), input.agent()?.model, configuredModel(), recent(), fallback()].find(
-      (item): item is ModelKey => !!item && valid(item),
-    )
+    return [
+      prompt.model.current(),
+      input.agent()?.model,
+      configuredModel(),
+      { providerID: Houshiar.id, modelID: Houshiar.auto },
+      recent(),
+      fallback(),
+    ].find((item): item is ModelKey => !!item && valid(item))
   }
 
   const current = () => {
@@ -292,3 +298,4 @@ export function createComposerModelSelection(input: {
 
   return selection satisfies ModelSelection
 }
+       

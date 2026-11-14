@@ -13,6 +13,7 @@ import {
   type ProviderPackage,
 } from "@opencode/ai/effect"
 import { Auth, mergeHttpOptions } from "@opencode/ai/route"
+import { Houshiar } from "@opencode/schema/houshiar"
 import { Context, Effect, Layer, Schema, Struct } from "effect"
 import { AISDK } from "./aisdk.js"
 import { Credential } from "./credential.js"
@@ -226,6 +227,13 @@ const resolveCatalogModel = Effect.fn("ModelResolver.resolveCatalogModel")(funct
   credential?: Credential.Value,
   dependencies?: Dependencies,
 ) {
+  if (model.providerID === Houshiar.id && model.id === Houshiar.auto)
+    return yield* new ModelConfigurationError({
+      providerID: model.providerID,
+      modelID: model.id,
+      package: model.package ?? "unknown",
+      detail: "Houshiar Auto must be routed to a concrete model before execution",
+    })
   if (Provider.isAISDK(model.package)) {
     const resolved = prepareRuntimeModel(model)
     const loadAISDK = dependencies?.loadAISDK
@@ -569,16 +577,4 @@ function usesAPIKeyAuth(packageName: string | undefined) {
     name === "@opencode/ai/providers/groq" ||
     name === "@opencode/ai/providers/mistral" ||
     name === "@opencode/ai/providers/togetherai" ||
-    name === "@opencode/ai/providers/vercel-ai-gateway" ||
-    name === "@opencode/ai/providers/xai" ||
-    name === "@opencode/ai/providers/openrouter" ||
-    name === "@opencode/ai/providers/azure" ||
-    name?.startsWith("@opencode/ai/providers/azure/") === true
-  )
-}
-
-export const node = makeLocationNode({
-  service: Service,
-  layer,
-  deps: [Provider.node, Model.node, Integration.node, Npm.node, AISDK.node],
-})
+    name === "@opencode/ai/providers/vercel-ai-gateway" 

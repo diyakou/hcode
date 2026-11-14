@@ -1,3 +1,4 @@
+import { Houshiar } from "@opencode/schema/houshiar"
 import { createStore } from "solid-js/store"
 import { dedupeWith } from "effect/Array"
 import { createSimpleContext } from "./helper"
@@ -194,6 +195,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
         const configured = configuredModel()
         if (configured && isModelValid(configured)) return configured
+
+        const auto = { providerID: Houshiar.id, modelID: Houshiar.auto }
+        if (isModelValid(auto)) return auto
 
         for (const item of preferences.recent) {
           if (isModelValid(item)) {
@@ -613,3 +617,4 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     return result
   },
 })
+       

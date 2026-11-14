@@ -2,12 +2,14 @@ export * as Generate from "./generate.js"
 
 import { ai, AIError, DecisionClient, ImageClient, LLMClient, Media } from "@opencode/ai/effect"
 import type { DecisionRequest, DecisionResult, ImageRequest, ImageResult } from "@opencode/schema/generate"
+import { Houshiar } from "@opencode/schema/houshiar"
 import { Money } from "@opencode/schema/money"
 import { SessionID } from "@opencode/schema/session-id"
 import { Context, Effect, Layer, Schema } from "effect"
 import { RequestExecutor } from "@opencode/ai/route"
 import { makeLocationNode } from "@opencode/util/effect/app-node"
 import { llmClient, requestExecutor } from "./effect/app-node-platform.js"
+import { HoushiarAuto } from "./houshiar-auto.js"
 import { Integration } from "./integration.js"
 import { ModelResolver } from "./model-resolver.js"
 import { Model } from "./model.js"
@@ -90,7 +92,18 @@ export const layer = Layer.effect(
     const decisionClient = yield* DecisionClient.Service
 
     const runText = Effect.fn("Generate.text")(function* (input: TextInput) {
-      const resolved = yield* resolver.resolve(input.model).pipe(
+      const selected = input.model ?? (yield* models.default())
+      const auto = selected?.providerID === Houshiar.id && selected.id === Houshiar.auto
+      const chosen = auto
+        ? HoushiarAuto.select(
+            (yield* models.available()).filter((model) => model.providerID === Houshiar.id),
+            { text: input.prompt, attachments: false },
+          )
+        : undefined
+      if (auto && !chosen)
+        return yield* new UnavailableError({ message: "No supported Houshiar model is available" })
+      const ref = chosen ? Model.Ref.make({ providerID: chosen.providerID, id: chosen.id }) : input.model
+      const resolved = yield* resolver.resolve(ref).pipe(
         Effect.catchTag(
           [
             "SessionRunnerModel.VariantUnavailableError",
