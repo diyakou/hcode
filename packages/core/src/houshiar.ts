@@ -52,13 +52,14 @@ export const models = Effect.fn("Houshiar.models")(function* (
   http: HttpClient.HttpClient,
   key: string,
   usage?: typeof Usage.Type,
+  baseURL: string = Houshiar.baseURL,
 ) {
   const planContextLimit =
     (usage?.context_limit ?? usage?.context?.limit) ?? usage?.limits?.max_context_tokens
   const maxContext = planContextLimit || usage?.limits?.max_context_tokens || Infinity
   const maxOutput = usage?.limits?.max_output_tokens || Infinity
   const response = yield* HttpClient.filterStatusOk(http)
-    .execute(HttpClientRequest.get(`${Houshiar.baseURL}/models`).pipe(HttpClientRequest.bearerToken(key)))
+    .execute(HttpClientRequest.get(`${baseURL}/models`).pipe(HttpClientRequest.bearerToken(key)))
     .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Catalog)), Effect.timeout("20 seconds"))
   return response.data
     .flatMap((item) => {
@@ -77,7 +78,7 @@ export const models = Effect.fn("Houshiar.models")(function* (
         name: remote.name || remote.id,
         // The gateway accepts the complete catalogue ID, including account/provider prefixes.
         package: isClaude ? "@opencode/ai/providers/anthropic-compatible" : "@opencode/ai/providers/openai-compatible",
-        settings: { baseURL: Houshiar.baseURL },
+        settings: { baseURL },
         limit: {
           context,
           output,
@@ -101,8 +102,13 @@ export const models = Effect.fn("Houshiar.models")(function* (
     .toSorted((a, b) => a.id.localeCompare(b.id))
 })
 
-export const fiveHour = Effect.fn("Houshiar.fiveHour")(function* (http: HttpClient.HttpClient, key: string, model?: string) {
-  const request = HttpClientRequest.get(`${Houshiar.baseURL}/usage/five-hour`).pipe(
+export const fiveHour = Effect.fn("Houshiar.fiveHour")(function* (
+  http: HttpClient.HttpClient,
+  key: string,
+  model?: string,
+  baseURL: string = Houshiar.baseURL,
+) {
+  const request = HttpClientRequest.get(`${baseURL}/usage/five-hour`).pipe(
     HttpClientRequest.bearerToken(key),
   )
   const response = yield* HttpClient.filterStatusOk(http)
@@ -111,13 +117,36 @@ export const fiveHour = Effect.fn("Houshiar.fiveHour")(function* (http: HttpClie
   return response
 })
 
-export const usage = Effect.fn("Houshiar.usage")(function* (http: HttpClient.HttpClient, key: string) {
+export const usage = Effect.fn("Houshiar.usage")(function* (
+  http: HttpClient.HttpClient,
+  key: string,
+  baseURL: string = Houshiar.baseURL,
+) {
   const response = yield* HttpClient.filterStatusOk(http)
-    .execute(HttpClientRequest.get(`${Houshiar.baseURL}/usage`).pipe(HttpClientRequest.bearerToken(key)))
+    .execute(HttpClientRequest.get(`${baseURL}/usage`).pipe(HttpClientRequest.bearerToken(key)))
     .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Usage)), Effect.timeout("20 seconds"))
   if (!response.authenticated) return yield* Effect.fail(new Error("Houshiar API key is invalid"))
   return response
 })
+
+// Resolves the live gateway base URL from `<host>/domain`, so a moved backend only needs to update that file.
+// Any failure (offline, hijacked DNS returning HTML, or a bare host) falls back to the bundled address.
+export const domain = Effect.fn("Houshiar.domain")(function* (http: HttpClient.HttpClient) {
+  const response = yield* HttpClient.filterStatusOk(http)
+    .execute(HttpClientRequest.get(Houshiar.domainURL))
+    .pipe(Effect.flatMap((response) => response.text), Effect.timeout("10 seconds"))
+  return resolveDomain(response)
+})
+
+export function resolveDomain(body: string) {
+  const value = body
+    .trim()
+    .split(/\s+/)[0]
+    ?.replace(/^https?:\/\//i, "")
+    .replace(/\/+$/, "")
+  if (!value || !/^[a-z0-9.-]+(:\d+)?$/i.test(value)) return undefined
+  return `https://${value}/v1`
+}
 
 export function summary(usage: typeof Usage.Type) {
   return [
@@ -136,4 +165,4 @@ export function summary(usage: typeof Usage.Type) {
   ]
     .filter((line) => line !== undefined)
     .join("\n")
-}
+} 

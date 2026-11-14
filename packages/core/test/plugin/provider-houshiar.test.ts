@@ -16,6 +16,14 @@ import { PluginTestLayer } from "./fixture"
 
 const it = testEffect(PluginTestLayer)
 
+// The plugin resolves the gateway domain on every start, so tests answer `/domain` from the same mock client.
+const withDomain = (http: HttpClient.HttpClient) =>
+  HttpClient.make((request) =>
+    request.url === Houshiar.domainURL
+      ? Effect.succeed(HttpClientResponse.fromWeb(request, new Response("wqai.morvism.ir")))
+      : http.execute(request),
+  )
+
 it.effect("keeps only Houshiar model access and API-key sign-in while preserving MCP sign-ins", () =>
   Effect.gen(function* () {
     const plugin = yield* Plugin.Service
@@ -33,7 +41,12 @@ it.effect("keeps only Houshiar model access and API-key sign-in while preserving
         models: [],
       })
     })
-    yield* HoushiarPlugin.effect(host)
+    yield* HoushiarPlugin.effect(host).pipe(
+      Effect.provideService(
+        HttpClient.HttpClient,
+        withDomain(HttpClient.make((request) => Effect.die(new Error(`unexpected request ${request.url}`)))),
+      ),
+    )
     expect((yield* integrations.list()).map((item) => item.id).sort()).toEqual([
       Integration.ID.make(Houshiar.id),
       Integration.ID.make("mcp_example"),
@@ -89,7 +102,7 @@ it.effect("keeps only Houshiar model access and API-key sign-in while preserving
         Stream.runDrain,
         Effect.forkChild({ startImmediately: true }),
       )
-      yield* HoushiarPlugin.effect(host).pipe(Effect.provideService(HttpClient.HttpClient, http))
+      yield* HoushiarPlugin.effect(host).pipe(Effect.provideService(HttpClient.HttpClient, withDomain(http)))
       if (timing === "connect")
         yield* integrations.connection.key({ integrationID: Integration.ID.make(Houshiar.id), key: "saved-key" })
       yield* Fiber.join(ready)
@@ -111,4 +124,54 @@ it.effect("keeps only Houshiar model access and API-key sign-in while preserving
       ).toBe(true)
     }),
   ),
+)
+
+it.effect("adopts the domain published at startup for provider settings and gateway requests", () =>
+  Effect.gen(function* () {
+    const plugin = yield* Plugin.Service
+    const host = yield* PluginHost.make(plugin)
+    const providers = yield* Provider.Service
+    const integrations = yield* Integration.Service
+    const bus = yield* Bus.Service
+    const credentials = yield* Credential.Service
+    const moved = "https://moved.example.ir/v1"
+    const seen: string[] = []
+    const http = HttpClient.make((request) => {
+      if (request.url === Houshiar.domainURL)
+        return Effect.succeed(HttpClientResponse.fromWeb(request, new Response("moved.example.ir")))
+      seen.push(request.url)
+      return Effect.succeed(
+        HttpClientResponse.fromWeb(
+          request,
+          Response.json(
+            request.url.endsWith("/usage")
+              ? { authenticated: true, status: "active" }
+              : { data: [{ id: "moved-model" }] },
+          ),
+        ),
+      )
+    })
+    yield* credentials.create({
+      integrationID: Integration.ID.make(Houshiar.id),
+      value: Credential.Key.make({ type: "key", key: "saved-key" }),
+    })
+    const ready = yield* bus.subscribe(Provider.Event.Updated).pipe(
+      Stream.filterEffect(() =>
+        providers
+          .snapshot()
+          .pipe(Effect.map((snapshot) => snapshot.records.get(Provider.ID.make(Houshiar.id))?.models.size === 1)),
+      ),
+      Stream.take(1),
+      Stream.runDrain,
+      Effect.forkChild({ startImmediately: true }),
+    )
+    yield* HoushiarPlugin.effect(host).pipe(Effect.provideService(HttpClient.HttpClient, http))
+    yield* Fiber.join(ready)
+    expect((yield* integrations.connection.active(Integration.ID.make(Houshiar.id))) !== undefined).toBe(true)
+    const available = yield* providers.available()
+    expect(available.map((provider) => provider.id)).toEqual([Provider.ID.make(Houshiar.id)])
+    const models = (yield* providers.snapshot()).records.get(Provider.ID.make(Houshiar.id))?.models
+    expect(models?.get(Model.ID.make("moved-model"))?.settings?.baseURL).toBe(moved)
+    expect(seen.every((url) => url.startsWith(moved))).toBe(true)
+  }),
 )

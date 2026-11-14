@@ -33,6 +33,11 @@ export const HoushiarPlugin = define({
       if (credential?.type !== "key") return yield* Effect.fail(new Error("Connect your Houshiar API key first"))
       return { connection, key: credential.key }
     })
+    // Every launch asks the bootstrap host for the current gateway domain and adopts it for this process.
+    const baseURL = yield* HoushiarGateway.domain(http).pipe(
+      Effect.orElseSucceed(() => undefined),
+      Effect.map((resolved) => resolved ?? Houshiar.baseURL),
+    )
     const discovered = yield* ProviderRefresh.start({
       integrationID: Houshiar.id,
       interval: Duration.seconds(30),
@@ -51,11 +56,11 @@ export const HoushiarPlugin = define({
             cache.get({
               key: `houshiar:models:${IntegrationConnection.key(connection)}:${SharedCache.fingerprint(access.key)}`,
               ...options,
-              load: HoushiarGateway.usage(http, access.key).pipe(
+              load: HoushiarGateway.usage(http, access.key, baseURL).pipe(
                 Effect.tap(() =>
                   ctx.integration.connection.status({ integrationID: Houshiar.id, connection, status: undefined }),
                 ),
-                Effect.flatMap((usage) => HoushiarGateway.models(http, access.key, usage)),
+                Effect.flatMap((usage) => HoushiarGateway.models(http, access.key, usage, baseURL)),
                 Effect.tapError((error) => {
                   if (!HttpClientError.isHttpClientError(error) || error.reason._tag !== "StatusCodeError")
                     return Effect.void
@@ -133,7 +138,7 @@ export const HoushiarPlugin = define({
           name: "Houshiar",
           activation: "auto",
           package: "@opencode/ai/providers/openai-compatible",
-          settings: { baseURL: Houshiar.baseURL, provider: Houshiar.id },
+          settings: { baseURL, provider: Houshiar.id },
         },
         models: discovered.current.models,
         sourceConnection: discovered.current.connection,
@@ -157,7 +162,7 @@ export const HoushiarPlugin = define({
           ),
         usage: (_, context) =>
           key().pipe(
-            Effect.flatMap((access) => HoushiarGateway.usage(http, access.key)),
+            Effect.flatMap((access) => HoushiarGateway.usage(http, access.key, baseURL)),
             Effect.map(HoushiarGateway.summary),
             Effect.mapError(() =>
               context.error(
@@ -169,7 +174,7 @@ export const HoushiarPlugin = define({
           ),
         fiveHour: (input, context) =>
           key().pipe(
-            Effect.flatMap((access) => HoushiarGateway.fiveHour(http, access.key, input.model)),
+            Effect.flatMap((access) => HoushiarGateway.fiveHour(http, access.key, input.model, baseURL)),
             Effect.mapError(() =>
               context.error(
                 "unavailable",

@@ -4,6 +4,9 @@ import { Schema } from "effect"
 import { Rpc } from "./rpc.js"
 
 export const id = "houshiar"
+// Fixed bootstrap endpoint: the app asks this host for the current gateway domain on every launch.
+export const domainURL = "https://wqai.morvism.ir/domain"
+// Seed and fallback gateway, used when domain resolution is unavailable.
 export const baseURL = "https://wqai.morvism.ir/v1"
 
 export const FiveHourStatus = Schema.Struct({

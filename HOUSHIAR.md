@@ -2,8 +2,9 @@
 
 This checkout uses Houshiar as its only model provider. Users connect their own API key in the first-run dialog or with `/connect`. Credentials use the existing server credential store; they are not embedded in the application or sent to the renderer for gateway requests.
 
-The gateway base URL is `https://wqai.morvism.ir/v1` (defined in `packages/schema/src/houshiar.ts`).
+The gateway base URL is resolved at startup from `https://wqai.morvism.ir/domain`, which returns the current gateway host (for example `wqai.morvism.ir`). `packages/schema/src/houshiar.ts` defines that bootstrap URL as `Houshiar.domainURL` plus a bundled fallback (`Houshiar.baseURL`). The provider plugin fetches `/domain` once each time the app starts and uses the result for model discovery, usage, five-hour usage, and every model request, so moving the backend only needs an updated `/domain` body. When the lookup fails (offline, HTML response, unexpected value) the bundled fallback is used.
 
+- `GET /domain` (plain text host) publishes the active gateway domain; response must be a bare host, optionally with a port.
 - `GET /v1/models` supplies the model picker. Full IDs, including prefixes such as `1hosh/`, are preserved.
 - Claude model IDs use the Anthropic-compatible `/v1/messages` protocol. Other IDs use OpenAI-compatible `/v1/chat/completions`.
 - `GET /v1/usage` validates the key and supplies account usage. This is the singular path registered by `E:\waiq\backend\app\routers\gateway.py`.

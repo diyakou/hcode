@@ -117,3 +117,37 @@ it.effect("rejects invalid keys and malformed catalogue envelopes", () =>
     expect(yield* HoushiarGateway.models(http, "invalid").pipe(Effect.isFailure)).toBe(true)
   }),
 )
+
+it.effect("resolves the gateway domain published by the backend", () =>
+  Effect.gen(function* () {
+    const http = HttpClient.make((request) => {
+      expect(request.url).toBe(Houshiar.domainURL)
+      return Effect.succeed(HttpClientResponse.fromWeb(request, new Response("new.example.ir\n")))
+    })
+    expect(yield* HoushiarGateway.domain(http)).toBe("https://new.example.ir/v1")
+  }),
+)
+
+it.effect("requests use the resolved domain instead of the bundled fallback", () =>
+  Effect.gen(function* () {
+    const seen: string[] = []
+    const http = HttpClient.make((request) => {
+      seen.push(request.url)
+      return Effect.succeed(
+        HttpClientResponse.fromWeb(request, Response.json({ data: [{ id: "model-a" }] })),
+      )
+    })
+    yield* HoushiarGateway.models(http, "user-key", undefined, "https://moved.example.ir/v1")
+    expect(seen).toEqual(["https://moved.example.ir/v1/models"])
+  }),
+)
+
+it.effect("normalizes the published domain and rejects values that are not a host", () =>
+  Effect.sync(() => {
+    expect(HoushiarGateway.resolveDomain("wqai.morvism.ir")).toBe("https://wqai.morvism.ir/v1")
+    expect(HoushiarGateway.resolveDomain("  https://wqai.morvism.ir/ \n")).toBe("https://wqai.morvism.ir/v1")
+    expect(HoushiarGateway.resolveDomain("api.example.ir:8443")).toBe("https://api.example.ir:8443/v1")
+    expect(HoushiarGateway.resolveDomain("<html>")).toBeUndefined()
+    expect(HoushiarGateway.resolveDomain("")).toBeUndefined()
+  }),
+)
