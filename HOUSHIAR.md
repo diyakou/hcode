@@ -2,7 +2,7 @@
 
 This checkout uses Houshiar as its only model provider. Users connect their own API key in the first-run dialog or with `/connect`. Credentials use the existing server credential store; they are not embedded in the application or sent to the renderer for gateway requests.
 
-The gateway base URL is `https://wqai.morvism.ir/v1` (defined in `packages/schema/src/houshiar.ts`).
+The gateway base URL is `https://api.houshiar-ai.ir/v1` (defined in `packages/schema/src/houshiar.ts`).
 
 - `GET /v1/models` supplies the model picker. Full IDs, including prefixes such as `1hosh/`, are preserved.
 - Claude model IDs use the Anthropic-compatible `/v1/messages` protocol. Other IDs use OpenAI-compatible `/v1/chat/completions`.
