@@ -1,5 +1,6 @@
 import { describe, expect } from "bun:test"
 import { AIError, ProviderInternalError, TransportError } from "@opencode/ai/effect"
+import { RequestExecutor } from "@opencode/ai/route"
 import { Agent } from "@opencode/schema/agent"
 import { Model } from "@opencode/schema/model"
 import { Provider } from "@opencode/core/provider"
@@ -33,6 +34,17 @@ const decisions = (cause: AIError, count: number) =>
   })
 
 describe("SessionRunnerRetry.policy", () => {
+  it.effect("stops automatic retry of a backend conversation history conflict", () =>
+    Effect.gen(function* () {
+      const conflict = RequestExecutor.httpFailure({
+        message: "Provider request failed with HTTP 409",
+        url: "https://gateway.test/v1/messages",
+        status: 409,
+        responseBody: '{"detail":{"code":"conversation_history_conflict"}}',
+      })
+      expect(yield* decisions(conflict, 1)).toEqual([false])
+    }),
+  )
   it.effect("stops retrying transport timeouts after three attempts", () =>
     Effect.gen(function* () {
       expect(yield* decisions(timeout, 4)).toEqual([true, true, true, false])

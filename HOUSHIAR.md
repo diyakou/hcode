@@ -5,13 +5,26 @@ This checkout uses Houshiar as its only model provider. Users connect their own 
 The gateway base URL is `https://api.houshiar-ai.ir/v1` (defined in `packages/schema/src/houshiar.ts`).
 
 - `GET /v1/models` supplies the model picker. Full IDs, including prefixes such as `1hosh/`, are preserved.
-- Claude model IDs use the Anthropic-compatible `/v1/messages` protocol. Other IDs use OpenAI-compatible `/v1/chat/completions`.
+- Every model defaults to the Anthropic-compatible `/v1/messages` protocol, including GPT and the free Auto fallback. The backend translates model IDs as needed. Newly created backend conversations use `protocol: "anthropic"`.
+- Primary model requests use backend memory. Each chat creates its own backend conversation with `POST /v1/conversations`; subagents and forks create independent conversations instead of inheriting the parent's ID. The app stores the remote ID in chat metadata with the owning local Session ID, never using a Session ID as a backend conversation ID.
+- Before each call the app fetches `GET /v1/conversations/{id}`, sends the returned `revision` in `x-memory-revision`, and sends only the new user message or pending tool results. The first request for a new child or fork can seed its independent history. Requests sharing a backend conversation are serialized until their response streams finish.
+- History/revision conflicts trigger one fetch and a rebuilt request using the server transcript. The identical failed payload is never blindly retried. A second conflict stops automatic retry. Auxiliary title, compaction, and generation calls stay stateless and cannot modify the chat's backend memory.
+- **Account conversations** on the new-session screen lists the account's saved chats, previews their history, and restores a selected chat into a local Session with the same backend conversation ID. User messages, images, assistant text, and tool calls/results are restored without executing historical work.
+- A restored legacy OpenAI conversation keeps `/v1/chat/completions` so its ID and history remain usable. Changing a model never changes an existing conversation’s protocol; new chats use Messages for every model.
 - `GET /v1/usage` validates the key and supplies account usage. This is the singular path registered by `E:\waiq\backend\app\routers\gateway.py`.
 - Its `limits.max_context_tokens` and `limits.max_output_tokens` cap the discovered models, so automatic compaction and reply sizing respect the account's plan after model switches. Structured gateway context-limit rejections also trigger the existing overflow compaction recovery.
 - `/usage` opens current account usage in the TUI and graphical app. The graphical app also has a usage button in provider settings.
 - Other model providers are removed after configuration and external provider plugins run. MCP sign-ins remain available.
 - Inventories refresh through the existing account-aware cache, including when the active API key changes. No model names are hardcoded.
 - Houshiar retries model discovery every 30 seconds. The new-session screen keeps API connection and model reload actions available; reload forces discovery with the saved key without entering it again.
+
+### Experimental Auto selection
+
+When the gateway offers `wu/ws/gpt-5.6-luna:free`, the picker includes `Auto (Experimental)` and new sessions prefer it over recent models. Explicit model selections and configured agent models still take precedence.
+
+Auto uses the active user’s saved Houshiar API key from the server credential store for Jev routing. It resolves the active connection for each new routing request, so changing the user’s key also changes the routing credential. No separate environment key is required, embedded in the application, or exposed to the renderer. Auto sends the latest user message and the available Houshiar model descriptions to `https://9router.morvism.ir/v1/systemone`, using `openrouter/typesafe/jev-1.13`. Each candidate receives a `noul` suitability score; the highest positive score wins. The selected model stays fixed for that user message during the location service's lifetime and respects an existing backend conversation’s protocol. A new user message is evaluated again.
+
+Missing user credentials, HTTP errors, a ten-second timeout, invalid or incomplete scores, and all-zero scores fall back to `wu/ws/gpt-5.6-luna:free`. Auto is unavailable when that fallback model is absent from the gateway catalog. On service reload, pending work is evaluated again. Ordinary model execution errors continue to use the existing model-fallback configuration.
 
 Use the Bun version pinned in `package.json` and install dependencies with `bun install --frozen-lockfile`.
 

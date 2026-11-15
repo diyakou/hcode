@@ -1,4 +1,11 @@
 export const dict = {
+  "houshiar.conversations.title": "مکالمه‌های حساب",
+  "houshiar.conversations.description": "یک مکالمهٔ ذخیره‌شده را برای ادامه در این دستگاه انتخاب کنید.",
+  "houshiar.conversations.empty": "مکالمهٔ ذخیره‌شده‌ای وجود ندارد.",
+  "houshiar.conversations.previous": "قبلی",
+  "houshiar.conversations.next": "بعدی",
+  "houshiar.conversations.back": "بازگشت به مکالمه‌ها",
+  "houshiar.conversations.continue": "ادامهٔ مکالمه",
   "desktop.menu.app": "OpenCode",
   "project.settings.extensions.skills.path": "مسیر پوشهٔ اسکیل",
   "project.settings.extensions.skills.pathPlaceholder": "./.opencode/skills/my-skill",

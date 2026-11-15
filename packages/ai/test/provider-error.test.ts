@@ -26,7 +26,8 @@ describe("provider error classification", () => {
       const topLevel = {
         error: {
           type: "invalid_request_error",
-          message: "درخواست شما شامل 200,327 توکن است که از محدودیت پلن شما (200,000 توکن) بیشتر است. لطفاً تاریخچه مکالمه را کوتاه‌تر کنید یا پلن خود را ارتقا دهید.",
+          message:
+            "درخواست شما شامل 200,327 توکن است که از محدودیت پلن شما (200,000 توکن) بیشتر است. لطفاً تاریخچه مکالمه را کوتاه‌تر کنید یا پلن خود را ارتقا دهید.",
         },
         input_tokens: tokens,
         max_context_tokens: 200000,
@@ -341,6 +342,23 @@ describe("provider error classification", () => {
     })
 
     expect(failure._tag).toBe("InvalidRequest")
+  })
+
+  test("does not retry conversation history conflicts, even when retry is suggested", () => {
+    ;[{}, { "x-should-retry": "true" }].forEach((headers) => {
+      ;[{ code: "conversation_history_conflict" }, { error: { code: "conversation_history_conflict" } }].forEach(
+        (data) => {
+          const failure = classifyProviderFailure({
+            message: "Provider request failed with HTTP 409",
+            status: 409,
+            rawBody: JSON.stringify(data),
+            http: new HttpContext({ url: "https://gateway.test/v1/messages", status: 409, headers }),
+          })
+          expect(failure._tag).toBe("InvalidRequest")
+          expect(isRetryable(new AIError({ reason: failure }))).toBe(false)
+        },
+      )
+    })
   })
 
   test("classifies transient client statuses as provider internal", () => {

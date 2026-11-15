@@ -2,9 +2,26 @@ export * as Houshiar from "./houshiar.js"
 
 import { Schema } from "effect"
 import { Rpc } from "./rpc.js"
+import { Session } from "./session.js"
 
 export const id = "houshiar"
 export const baseURL = "https://api.houshiar-ai.ir/v1"
+export const autoModel = "auto"
+export const fallbackModel = "wu/ws/gpt-5.6-luna:free"
+
+export const Conversation = Schema.Struct({
+  id: Schema.NonEmptyString,
+  protocol: Schema.Literals(["openai", "anthropic"]),
+  revision: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  created_at: Schema.String,
+  updated_at: Schema.String,
+})
+export const ConversationHistory = Schema.Struct({
+  ...Conversation.fields,
+  messages: Schema.Array(Schema.Record(Schema.String, Schema.Json)),
+  summary: Schema.String,
+  system: Schema.Json,
+})
 
 export const FiveHourStatus = Schema.Struct({
   managed: Schema.Boolean,
@@ -18,8 +35,17 @@ export const FiveHourStatus = Schema.Struct({
       enforced: Schema.Boolean,
       exempt: Schema.Boolean,
       limit_reached: Schema.Boolean,
-      credits: Schema.NullOr(Schema.Struct({ limit: Schema.NullOr(Schema.Number), used: Schema.Number, reserved: Schema.Number, remaining: Schema.Number })),
-      requests: Schema.NullOr(Schema.Struct({ limit: Schema.NullOr(Schema.Number), used: Schema.Number, remaining: Schema.Number })),
+      credits: Schema.NullOr(
+        Schema.Struct({
+          limit: Schema.NullOr(Schema.Number),
+          used: Schema.Number,
+          reserved: Schema.Number,
+          remaining: Schema.Number,
+        }),
+      ),
+      requests: Schema.NullOr(
+        Schema.Struct({ limit: Schema.NullOr(Schema.Number), used: Schema.Number, remaining: Schema.Number }),
+      ),
       next_release_at: Schema.NullOr(Schema.String),
       window_clears_at: Schema.NullOr(Schema.String),
     }),
@@ -40,6 +66,23 @@ export const FiveHourStatus = Schema.Struct({
 export const Definition = Rpc.define({
   id: "houshiar.account",
   methods: {
+    conversations: {
+      input: Schema.toStandardSchemaV1(
+        Schema.Struct({ offset: Schema.optional(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))) }),
+      ),
+      output: Schema.toStandardSchemaV1(Schema.Struct({ data: Schema.Array(Conversation) })),
+      errors: { unavailable: Schema.toStandardSchemaV1(Schema.String) },
+    },
+    conversation: {
+      input: Schema.toStandardSchemaV1(Schema.Struct({ id: Schema.NonEmptyString })),
+      output: Schema.toStandardSchemaV1(ConversationHistory),
+      errors: { unavailable: Schema.toStandardSchemaV1(Schema.String) },
+    },
+    continueConversation: {
+      input: Schema.toStandardSchemaV1(Schema.Struct({ id: Schema.NonEmptyString })),
+      output: Schema.toStandardSchemaV1(Schema.Struct({ sessionID: Session.ID })),
+      errors: { unavailable: Schema.toStandardSchemaV1(Schema.String) },
+    },
     refresh: {
       input: Schema.toStandardSchemaV1(Schema.Struct({})),
       output: Schema.toStandardSchemaV1(Schema.Boolean),

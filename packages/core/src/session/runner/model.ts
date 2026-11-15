@@ -1,11 +1,17 @@
 export * as SessionRunnerModel from "./model.js"
 
 import { makeLocationNode } from "@opencode/util/effect/app-node"
+import { httpClient } from "@opencode/util/effect/app-node-platform"
+import { Houshiar } from "@opencode/schema/houshiar"
 import { LanguageModel } from "@opencode/ai/effect"
 import { Model } from "@opencode/schema/model"
 import { Provider } from "@opencode/schema/provider"
 import { Context, Effect, Layer, Schema } from "effect"
+import { HttpClient } from "effect/http"
+import { HoushiarAuto } from "../../houshiar-auto.js"
+import { HoushiarMemory } from "../../houshiar-memory.js"
 import { Agent } from "../../agent.js"
+import { Integration } from "../../integration.js"
 import { ModelResolver } from "../../model-resolver.js"
 import { SessionSchema } from "../schema.js"
 
@@ -38,6 +44,7 @@ export interface Interface {
   readonly resolve: (
     session: SessionSchema.Info,
     available: () => Effect.Effect<ReadonlyArray<Model.Info>>,
+    prompt?: { readonly id: string; readonly text: string },
   ) => Effect.Effect<Resolved, Error>
 }
 
@@ -73,32 +80,82 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const resolver = yield* ModelResolver.Service
     const agents = yield* Agent.Service
+    const http = yield* HttpClient.HttpClient
+    const integrations = yield* Integration.Service
+    const selections = new Map<string, { prompt: string; model: Model.Info }>()
     return Service.of({
-      resolve: Effect.fn("SessionRunnerModel.resolve")(function* (session, available) {
+      resolve: Effect.fn("SessionRunnerModel.resolve")(function* (session, available, prompt) {
+        const conversation = HoushiarMemory.binding(session)
+        const select = (model: Model.Info, variant?: Model.VariantID) =>
+          resolver.resolveModel(
+            model.providerID === Houshiar.id
+              ? {
+                  ...model,
+                  // A saved conversation keeps its protocol even when its model changes.
+                  package:
+                    conversation?.protocol === "openai"
+                      ? "@opencode/ai/providers/openai-compatible"
+                      : "@opencode/ai/providers/anthropic-compatible",
+                }
+              : model,
+            variant,
+          )
         // Location plugins populate and filter the catalog asynchronously during layer startup.
-        if (!session.model) {
-          const agent = (yield* agents.select(session.agent)).info?.model
-          const preferred =
-            agent &&
-            (yield* available()).find((model) => model.providerID === agent.providerID && model.id === agent.id)
-          const resolved = preferred
-            ? yield* resolver.resolveModel(preferred, agent.variant)
-            : yield* resolver.resolve()
-          if (resolved) return resolved
-          return yield* new ModelNotSelectedError({ sessionID: session.id })
+        const requested =
+          session.model ??
+          (yield* Effect.gen(function* () {
+            const agent = (yield* agents.select(session.agent)).info?.model
+            const preferred =
+              agent &&
+              (yield* available()).find((model) => model.providerID === agent.providerID && model.id === agent.id)
+            const resolved = preferred ? yield* select(preferred, agent.variant) : yield* resolver.resolve()
+            if (resolved) return resolved.ref
+            return yield* new ModelNotSelectedError({ sessionID: session.id })
+          }))
+        if (requested.providerID === Houshiar.id && requested.id === Houshiar.autoModel) {
+          const candidates = (yield* available()).filter(
+            (model) => model.providerID === Houshiar.id && model.id !== Houshiar.autoModel,
+          )
+          const fallback = candidates.find((model) => model.id === Houshiar.fallbackModel)
+          if (!fallback)
+            return yield* new ModelUnavailableError({
+              providerID: requested.providerID,
+              modelID: Model.ID.make(Houshiar.fallbackModel),
+            })
+          const cached = selections.get(session.id)
+          const selected =
+            cached &&
+            (!prompt || cached.prompt === prompt.id) &&
+            candidates.find((model) => model.id === cached.model.id)
+          if (selected) return yield* select(selected)
+          const routed = prompt
+            ? yield* Effect.gen(function* () {
+                const connection = yield* integrations.connection.active(Integration.ID.make(Houshiar.id))
+                const credential = connection ? yield* integrations.connection.resolve(connection) : undefined
+                if (credential?.type !== "key") return
+                return yield* HoushiarAuto.select(http, credential.key, candidates, prompt.text)
+              }).pipe(Effect.orElseSucceed(() => undefined))
+            : undefined
+          const model = routed ?? fallback
+          if (prompt) selections.set(session.id, { prompt: prompt.id, model })
+          return yield* select(model)
         }
         const selected = (yield* available()).find(
-          (model) => model.providerID === session.model?.providerID && model.id === session.model.id,
+          (model) => model.providerID === requested.providerID && model.id === requested.id,
         )
         if (!selected)
           return yield* new ModelUnavailableError({
-            providerID: session.model.providerID,
-            modelID: session.model.id,
+            providerID: requested.providerID,
+            modelID: requested.id,
           })
-        return yield* resolver.resolveModel(selected, session.model.variant)
+        return yield* select(selected, requested.variant)
       }),
     })
   }),
 )
 
-export const node = makeLocationNode({ service: Service, layer, deps: [ModelResolver.node, Agent.node] })
+export const node = makeLocationNode({
+  service: Service,
+  layer,
+  deps: [ModelResolver.node, Agent.node, Integration.node, httpClient],
+})

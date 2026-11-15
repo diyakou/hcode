@@ -1,10 +1,13 @@
 import { define } from "@opencode/plugin/effect/plugin"
 import { Houshiar } from "@opencode/schema/houshiar"
 import { Integration } from "@opencode/schema/integration"
-import type { Model } from "@opencode/schema/model"
-import { Duration, Effect, Option, Schema } from "effect"
+import { Model } from "../../model.js"
+import { Bus } from "../../bus.js"
+import { Duration, Effect, Option, Schema, Struct } from "effect"
 import { HttpClient, HttpClientError } from "effect/http"
 import { HoushiarGateway } from "../../houshiar.js"
+import { HoushiarConversations } from "../../houshiar-conversations.js"
+import { HoushiarMemory } from "../../houshiar-memory.js"
 import { IntegrationConnection } from "../../integration/connection.js"
 import { Provider } from "../../provider.js"
 import { SharedCache } from "../../shared-cache.js"
@@ -18,6 +21,7 @@ export const HoushiarPlugin = define({
   effect: Effect.fn(function* (ctx) {
     const http = yield* HttpClient.HttpClient
     const cache = yield* SharedCache.Service
+    const restoreContext = yield* Effect.context<Model.Service | Bus.Service>()
     yield* ctx.integration.transform((integrations) => {
       for (const integration of integrations.list()) {
         if (integration.id !== Houshiar.id && !integration.id.startsWith("mcp_")) integrations.remove(integration.id)
@@ -81,71 +85,80 @@ export const HoushiarPlugin = define({
       "http.request",
       (event) =>
         Effect.gen(function* () {
-          if (event.kind !== "primary") return
-          const metadata = yield* ctx.session.get({ sessionID: event.sessionID }).pipe(
-            Effect.map((session) => session.metadata),
-            Effect.catch(() => Effect.succeed(undefined)),
-          )
-          const conversationID =
-            typeof metadata?.houshiarConversationID === "string" ? metadata.houshiarConversationID : undefined
+          if (event.kind === "primary") return
           const body = Option.getOrUndefined(decodeBody(yield* Effect.promise(() => event.request.clone().text())))
           if (!body) return
           const headers = new Headers(event.request.headers)
           headers.delete("content-length")
-          if (conversationID) headers.set("X-Conversation-ID", conversationID)
-          if (typeof metadata?.houshiarServerRevision === "number")
-            headers.set("X-Memory-Revision", String(metadata.houshiarServerRevision))
+          // Each app Session owns its full transcript, including subagent Sessions.
+          headers.delete("x-conversation-id")
+          headers.delete("x-memory-revision")
           event.request = new Request(event.request, {
             headers,
             body: JSON.stringify({
-              ...body,
-              ...(conversationID ? { conversation_id: conversationID } : { memory_enabled: true }),
+              ...Struct.omit(body, ["conversation_id"]),
+              memory_enabled: false,
             }),
           })
-        }),
-      { providerID: Provider.ID.make(Houshiar.id) },
-    )
-    yield* ctx.session.hook(
-      "http.response",
-      (event) =>
-        Effect.gen(function* () {
-          if (event.kind !== "primary") return
-          const conversationID = event.response.headers.get("X-Conversation-ID")
-          if (!conversationID) return
-          // Persisting the conversation identity is best-effort: a failed update must not fail the
-          // model call that produced the response.
-          yield* ctx.session
-            .get({ sessionID: event.sessionID })
-            .pipe(
-              Effect.flatMap((session) =>
-                ctx.session.update({
-                  sessionID: event.sessionID,
-                  metadata: { ...(session.metadata ?? {}), houshiarConversationID: conversationID },
-                }),
-              ),
-              Effect.catchCause((cause) => Effect.logWarning("failed to persist Houshiar conversation ID", { cause })),
-            )
         }),
       { providerID: Provider.ID.make(Houshiar.id) },
     )
 
     yield* ctx.provider.transform((providers) => {
       for (const item of providers.list()) providers.remove(item.provider.id)
+      const fallback = discovered.current.models.find((model) => model.id === Houshiar.fallbackModel)
       providers.add({
         info: {
           id: Provider.ID.make(Houshiar.id),
           integrationID: Integration.ID.make(Houshiar.id),
           name: "Houshiar",
           activation: "auto",
-          package: "@opencode/ai/providers/openai-compatible",
+          package: "@opencode/ai/providers/anthropic-compatible",
           settings: { baseURL: Houshiar.baseURL, provider: Houshiar.id },
         },
-        models: discovered.current.models,
+        models: fallback
+          ? [
+              { ...fallback, id: Model.ID.make(Houshiar.autoModel), name: "Auto (Experimental)", variants: [] },
+              ...discovered.current.models.filter((model) => model.id !== Houshiar.autoModel),
+            ]
+          : discovered.current.models,
         sourceConnection: discovered.current.connection,
       })
     })
+    yield* ctx.model.transform((models) => {
+      if (models.get(Provider.ID.make(Houshiar.id), Model.ID.make(Houshiar.autoModel)))
+        models.default.set(Provider.ID.make(Houshiar.id), Model.ID.make(Houshiar.autoModel))
+    })
     yield* ctx.rpc
       .register(Houshiar.Definition, {
+        conversations: (input, context) =>
+          key().pipe(
+            Effect.flatMap((access) => HoushiarGateway.conversations(http, `Bearer ${access.key}`, input.offset)),
+            Effect.mapError(() =>
+              context.error("unavailable", "Unable to load account conversations", "conversations_unavailable"),
+            ),
+          ),
+        conversation: (input, context) =>
+          key().pipe(
+            Effect.flatMap((access) => HoushiarGateway.conversation(http, `Bearer ${access.key}`, input.id)),
+            Effect.mapError(() =>
+              context.error("unavailable", "Unable to load conversation history", "conversation_unavailable"),
+            ),
+          ),
+        continueConversation: (input, context) =>
+          key().pipe(
+            Effect.flatMap((access) => HoushiarGateway.conversation(http, `Bearer ${access.key}`, input.id)),
+            Effect.flatMap((history) =>
+              HoushiarConversations.restore(ctx.session, history).pipe(Effect.provide(restoreContext)),
+            ),
+            Effect.mapError((error) =>
+              context.error(
+                "unavailable",
+                error instanceof HoushiarMemory.SyncError ? error.message : "Unable to restore conversation",
+                "conversation_unavailable",
+              ),
+            ),
+          ),
         refresh: (_, context) =>
           discovered.refresh.pipe(
             Effect.andThen(() =>

@@ -92,6 +92,7 @@ export const isContextOverflowFailure = (failure: unknown) =>
  * not deliver an accepted write, and unrecognized failures. Callers decide which calls are safe to repeat.
  */
 export const isRetryable = (error: AIError) => {
+  if (error.reason._tag === "InvalidRequest" && error.reason.http?.status === 409) return false
   const override = error.reason.http?.headers["x-should-retry"]
   if (override === "true") return true
   if (override === "false") return false
@@ -184,7 +185,7 @@ const RATE_LIMIT_TEXT = /rate increased too quickly|rate[-_\s]?limit|too[_\s]?ma
 // Z.ai reports balance, plan expiry, plan limits, and plan model access on 429.
 // Cerebras reports its per-minute token throttle as `token_quota_exceeded`; that is a rate limit.
 const QUOTA_TEXT =
-  /insufficient[-_\s]?(?:quota|balance)|(?<!token_)quota[-_\s]?exceeded|budget exceeded|usage limit|limit exhausted|package has expired|plan does not yet include/i
+  /insufficient[-_\s]?(?:quota|balance)|(?<!token_)quota[-_\s]?exceeded|budget exceeded|credit[-_\s]?limit|usage limit|limit exhausted|package has expired|plan does not yet include/i
 // Policy rejections without a dedicated code, matched against the provider's own
 // explanation only. OpenAI reuses `invalid_prompt` for usage-policy rejections while
 // Bedrock Mantle reuses it for schema validation; Anthropic reports blocked output
@@ -318,6 +319,15 @@ export function classifyProviderFailure(input: ProviderFailure): AIError["reason
       rateLimit: input.rateLimit,
     })
   if (
+    input.status === 409 &&
+    codes.some((code) =>
+      ["conversation_history_conflict", "conversation_revision_conflict", "conversation_protocol_mismatch"].includes(
+        code,
+      ),
+    )
+  )
+    return new InvalidRequestError(details)
+  if (
     input.status === 408 ||
     input.status === 409 ||
     (input.status !== undefined && input.status >= 500) ||
@@ -367,6 +377,7 @@ function providerCodes(value: unknown) {
   const decoded = typeof value === "string" ? Option.getOrUndefined(decodeJson(value)) : value
   if (!isRecord(decoded)) return []
   const error = isRecord(decoded.error) ? decoded.error : undefined
+  const detail = isRecord(decoded.detail) ? decoded.detail : undefined
   const inner = error && isRecord(error.innererror) ? error.innererror : undefined
   const metadata = error && isRecord(error.metadata) ? error.metadata : undefined
   const response = isRecord(decoded.response) ? decoded.response : undefined
@@ -374,6 +385,7 @@ function providerCodes(value: unknown) {
   const exception = isRecord(decoded.exception) ? decoded.exception : undefined
   return [
     decoded.code,
+    detail?.code,
     ...awsErrorType(decoded.__type),
     ...awsErrorType(decoded.code),
     decoded.error_type,

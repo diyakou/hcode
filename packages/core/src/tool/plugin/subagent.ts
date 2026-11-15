@@ -59,6 +59,7 @@ export const description = [
   "You can invoke multiple subagents in parallel in a single turn to divide research or execution across independent subtasks for faster and more thorough results.",
   "The output includes a sessionID you can pass back later to continue that specific conversation with the subagent.",
   "New child sessions start with fresh context, so include all relevant context and instructions when you don't pass a sessionID.",
+  "User images in the parent's current context are attached automatically, including new images when following up with an existing child.",
   "Foreground (default) runs the subagent to completion and returns its final response.",
   "Background mode (background=true) launches it asynchronously and returns immediately; you are notified when it finishes.",
   "Use background only for independent work that you will not work on yourself while it runs.",
@@ -211,11 +212,43 @@ export const Plugin = {
               const background = input.background === true
               yield* context.progress({ sessionID: child.id, status: "running" })
 
+              const files = yield* Effect.gen(function* () {
+                const attached = new Set(
+                  existing === undefined
+                    ? []
+                    : [
+                        ...(yield* sessions.context(child.id)).flatMap((message) =>
+                          message.type === "user" ? (message.files ?? []).map((file) => file.data) : [],
+                        ),
+                        ...(yield* sessions.inbox(child.id)).flatMap((item) =>
+                          item.type === "user" ? (item.payload.files ?? []).map((file) => file.data) : [],
+                        ),
+                      ],
+                )
+                return (
+                  (yield* sessions.context(parent.id))
+                    .flatMap((message) => (message.type === "user" ? (message.files ?? []) : []))
+                    .filter((file) => {
+                      if (!file.mime.startsWith("image/") || attached.has(file.data)) return false
+                      attached.add(file.data)
+                      return true
+                    })
+                    // Parent mention offsets refer to different text than the child's task.
+                    .map((file) => ({
+                      uri: `data:${file.mime};base64,${file.data}`,
+                      source: file.source,
+                      name: file.name,
+                      description: file.description,
+                    }))
+                )
+              }).pipe(Effect.mapError((error) => new ToolFailure({ message: "Failed to load subagent images", error })))
+
               // Standard prompt admission outside the job: Job.start joining a running child skips
               // its run effect, and the default wake starts an idle child or steers a running one.
               yield* sessions
                 .prompt({
                   sessionID: child.id,
+                  ...(files.length > 0 ? { files } : {}),
                   text:
                     existing === undefined
                       ? [
@@ -331,8 +364,7 @@ export const Plugin = {
           "",
           "Available subagents:",
           ...available.map(
-            (agent) =>
-              `- ${agent.id}: ${agent.description ?? "Specialized subagent for targeted tasks."}`,
+            (agent) => `- ${agent.id}: ${agent.description ?? "Specialized subagent for targeted tasks."}`,
           ),
         ].join("\n")
       })

@@ -1,6 +1,7 @@
 export * as SessionContext from "./context.js"
 
 import { Model } from "../model.js"
+import { Houshiar } from "@opencode/schema/houshiar"
 import { Permission } from "../permission.js"
 import { Context, Effect, Layer } from "effect"
 import { Agent } from "../agent.js"
@@ -166,17 +167,28 @@ const layer = Layer.effect(
     })
 
     const load = Effect.fn("SessionContext.load")(function* (selection: Selection) {
-      const model = yield* resolveModel(selection.session)
+      const prompt =
+        !selection.session.model ||
+        (selection.session.model.providerID === Houshiar.id && selection.session.model.id === Houshiar.autoModel)
+          ? (yield* store
+              .messages({ sessionID: selection.session.id, type: "user", order: "desc", limit: 1 })
+              .pipe(Effect.orDie))[0]
+          : undefined
+      const resolved = yield* models.resolve(
+        selection.session,
+        model.available,
+        prompt?.type === "user" ? { id: prompt.id, text: prompt.text } : undefined,
+      )
       const history = yield* SessionHistory.entriesForRunner(
         db,
         selection.session.id,
         selection.instructions,
-        model.ref,
+        resolved.ref,
       )
       return {
         session: selection.session,
         agent: selection.agent,
-        model,
+        model: resolved,
         initial: history.initial,
         messages: history.entries.map((entry) => entry.message),
         tools: selection.tools,

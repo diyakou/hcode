@@ -224,7 +224,8 @@ describe("SubagentTool", () => {
       expect(SubagentTool.description).toContain("do not work on a subagent-owned scope until it finishes")
       expect(SubagentTool.description).toContain("Keep integration and final verification in the parent session")
       expect(SubagentTool.description).toContain("Proactively use subagents")
-    }))
+    }),
+  )
 
   completionIt.live("admits one durable completion across live delivery and restart replay", () =>
     Effect.acquireRelease(
@@ -475,8 +476,8 @@ describe("SubagentTool", () => {
             agent: "reviewer",
             model: childModel,
           })
-          expect((yield* sessions.inbox(child.id)).find((message) => message.type === "user")?.payload.text).toBe(
-            "You are a subagent spawned by another session.\nreview this",
+          expect((yield* sessions.inbox(child.id)).find((message) => message.type === "user")?.payload.text).toEqual(
+            expect.stringContaining("\nreview this"),
           )
 
           const fallback = yield* executeTool(registry, {
@@ -492,6 +493,126 @@ describe("SubagentTool", () => {
           const fallbackChild = yield* sessions.get(outputSessionID(fallback.metadata))
           expect(fallbackChild).toMatchObject({ parentID: parent.id, model: parentModel })
         }),
+      ),
+    ),
+  )
+  ;[false, true].forEach((background) =>
+    it.live(`forwards user images to ${background ? "background" : "foreground"} children and subsequent prompts`, () =>
+      Effect.acquireRelease(
+        Effect.promise(() => tmpdir()),
+        (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+      ).pipe(
+        Effect.flatMap((dir) =>
+          Effect.gen(function* () {
+            const sessions = yield* Session.Service
+            const database = yield* Database.Service
+            const bus = yield* Bus.Service
+            const jobs = yield* Job.Service
+            const parent = yield* sessions.create({
+              location: Location.Ref.make({ directory: AbsolutePath.make(dir.path) }),
+              model: parentModel,
+            })
+            yield* withSubagent(parent.location)
+            const locations = yield* LocationServiceMap.Service
+            const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+            const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+            const gif = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+            yield* sessions.prompt({
+              sessionID: parent.id,
+              text: "Review @screenshot",
+              files: [
+                {
+                  uri: `data:image/png;base64,${png}`,
+                  name: "screenshot.png",
+                  mention: { start: 7, end: 18, text: "@screenshot" },
+                },
+                { uri: `data:image/png;base64,${png}`, name: "duplicate.png" },
+                { uri: "data:text/plain;base64,aGVsbG8=", name: "notes.txt" },
+              ],
+              resume: false,
+            })
+            yield* SessionInbox.promote(database.db, bus, parent.id, "steer")
+            yield* sessions.prompt({ sessionID: parent.id, text: "Ask the reviewer to inspect it", resume: false })
+            yield* SessionInbox.promote(database.db, bus, parent.id, "steer")
+            const parentHistory = yield* sessions.context(parent.id)
+            const first = yield* executeTool(registry, {
+              sessionID: parent.id,
+              ...toolIdentity,
+              call: {
+                type: "tool-call",
+                id: "image-first",
+                name: SubagentTool.name,
+                input: { agent: "reviewer", description: "image review", prompt: "Inspect the image", background },
+              },
+            })
+            expect(first.status).toBe("completed")
+            const childID = outputSessionID(first.metadata)
+            yield* jobs.wait({ id: childID })
+            expect(yield* sessions.context(parent.id)).toEqual(parentHistory)
+            expect(
+              (yield* sessions.inbox(childID)).flatMap((item) =>
+                item.type === "user" ? (item.payload.files ?? []) : [],
+              ),
+            ).toEqual([{ data: png, mime: "image/png", name: "screenshot.png", source: { type: "inline" } }])
+            yield* sessions.prompt({
+              sessionID: parent.id,
+              text: "Here is another image",
+              files: [{ uri: `data:image/gif;base64,${gif}`, name: "second.gif" }],
+              resume: false,
+            })
+            yield* SessionInbox.promote(database.db, bus, parent.id, "steer")
+            const updatedParentHistory = yield* sessions.context(parent.id)
+            const second = yield* executeTool(registry, {
+              sessionID: parent.id,
+              ...toolIdentity,
+              call: {
+                type: "tool-call",
+                id: "image-followup",
+                name: SubagentTool.name,
+                input: {
+                  agent: "reviewer",
+                  description: "image followup",
+                  prompt: "Inspect the new image",
+                  sessionID: childID,
+                },
+              },
+            })
+            expect(second.status).toBe("completed")
+            expect(
+              (yield* sessions.inbox(childID)).flatMap((item) =>
+                item.type === "user" ? (item.payload.files ?? []).map((file) => file.data) : [],
+              ),
+            ).toEqual([png, gif])
+            yield* SessionInbox.promote(database.db, bus, childID, "steer")
+            const third = yield* executeTool(registry, {
+              sessionID: parent.id,
+              ...toolIdentity,
+              call: {
+                type: "tool-call",
+                id: "image-again",
+                name: SubagentTool.name,
+                input: {
+                  agent: "reviewer",
+                  description: "image followup",
+                  prompt: "Continue reviewing",
+                  sessionID: childID,
+                },
+              },
+            })
+            expect(third.status).toBe("completed")
+            expect(yield* sessions.context(parent.id)).toEqual(updatedParentHistory)
+            expect(
+              (yield* sessions.inbox(childID)).flatMap((item) =>
+                item.type === "user" ? (item.payload.files ?? []) : [],
+              ),
+            ).toEqual([])
+            expect(
+              (yield* sessions.context(childID)).flatMap((item) =>
+                item.type === "user" ? (item.files ?? []).map((file) => file.data) : [],
+              ),
+            ).toEqual([png, gif])
+          }),
+        ),
       ),
     ),
   )
@@ -545,7 +666,7 @@ describe("SubagentTool", () => {
             (yield* sessions.inbox(childID)).flatMap((message) =>
               message.type === "user" ? [message.payload.text] : [],
             ),
-          ).toEqual(["You are a subagent spawned by another session.\nreview this", "continue this"])
+          ).toEqual([expect.stringContaining("\nreview this"), "continue this"])
           expect(second.content).toEqual([{ type: "text", text: completedOutput(childID) }])
         }),
       ),

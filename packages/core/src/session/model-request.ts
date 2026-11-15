@@ -24,10 +24,12 @@ import type {
 import type { Agent } from "@opencode/schema/agent"
 import type { Model } from "@opencode/schema/model"
 import type { Content } from "@opencode/schema/tool"
-import { Cause, Context, Effect, Layer, Result, Stream } from "effect"
+import { Cause, Context, Effect, Layer, Option, Result, Stream } from "effect"
 import { HttpClientRequest, HttpClientResponse } from "effect/http"
 import { makeLocationNode } from "@opencode/util/effect/app-node"
 import { App } from "../app.js"
+import { Houshiar } from "@opencode/schema/houshiar"
+import { HoushiarMemory } from "../houshiar-memory.js"
 import { Instructions } from "../instructions/index.js"
 import { Permission } from "../permission.js"
 import { PluginHooks } from "../plugin/hooks.js"
@@ -239,6 +241,7 @@ export const layer = Layer.effect(
     const hooks = yield* PluginHooks.Service
     const transport = yield* SessionModelTransport.Service
     const app = yield* App.Metadata
+    const memory = yield* Effect.serviceOption(HoushiarMemory.Service)
     const prepare = Effect.fn("SessionModelRequest.prepare")(function* <
       S extends SessionRequest & { tools?: Definitions },
     >(kind: SessionRequestKind, input: Input, shape: (draft: SessionRequest, tools: Definitions) => Effect.Effect<S>) {
@@ -334,7 +337,7 @@ export const layer = Layer.effect(
       const hasHttpHooks =
         (yield* hooks.has("session", "http.request", model.ref.providerID)) ||
         (yield* hooks.has("session", "http.response", model.ref.providerID))
-      const http: StreamOptions["http"] = hasHttpHooks
+      const hookedHttp: StreamOptions["http"] = hasHttpHooks
         ? (req, handler) =>
             Effect.gen(function* () {
               const request = yield* HttpClientRequest.toWeb(req)
@@ -363,6 +366,15 @@ export const layer = Layer.effect(
               return HttpClientResponse.fromWeb(sent, after.response)
             })
         : undefined
+      const http: StreamOptions["http"] =
+        kind === "primary" && model.ref.providerID === Houshiar.id
+          ? (req, handler) =>
+              Option.isSome(memory)
+                ? hookedHttp
+                  ? hookedHttp(req, (forwarded) => memory.value.middleware(session.id)(forwarded, handler))
+                  : memory.value.middleware(session.id)(req, handler)
+                : Effect.fail(new HoushiarMemory.SyncError({ message: "Houshiar memory service is unavailable" }))
+          : hookedHttp
       // HTTP hooks wrap every HTTP request, including the WebSocket fallback path. The route decides
       // which transport actually carries the request, so both hook families are always offered.
       const webSocket =
@@ -435,5 +447,5 @@ export const layer = Layer.effect(
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [PluginHooks.node, SessionModelTransport.node, App.node],
+  deps: [PluginHooks.node, SessionModelTransport.node, App.node, HoushiarMemory.node],
 })

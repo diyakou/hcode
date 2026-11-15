@@ -15,6 +15,42 @@ const RemoteModel = Schema.Struct({
 })
 const Catalog = Schema.Struct({ data: Schema.Array(Schema.Unknown) })
 const decodeModel = Schema.decodeUnknownOption(RemoteModel)
+
+export const createConversation = Effect.fn("Houshiar.createConversation")(function* (
+  http: HttpClient.HttpClient,
+  authorization: string,
+  protocol: typeof Houshiar.Conversation.Type.protocol,
+) {
+  const request = yield* HttpClientRequest.post(`${Houshiar.baseURL}/conversations`).pipe(
+    HttpClientRequest.setHeader("authorization", authorization),
+    HttpClientRequest.bodyJson({ protocol }),
+  )
+  return yield* HttpClient.filterStatusOk(http)
+    .execute(request)
+    .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Houshiar.Conversation)), Effect.timeout("20 seconds"))
+})
+
+export const conversation = (http: HttpClient.HttpClient, authorization: string, id: string) =>
+  HttpClient.filterStatusOk(http)
+    .execute(
+      HttpClientRequest.get(`${Houshiar.baseURL}/conversations/${encodeURIComponent(id)}`).pipe(
+        HttpClientRequest.setHeader("authorization", authorization),
+      ),
+    )
+    .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Houshiar.ConversationHistory)), Effect.timeout("20 seconds"))
+
+export const conversations = (http: HttpClient.HttpClient, authorization: string, offset = 0) =>
+  HttpClient.filterStatusOk(http)
+    .execute(
+      HttpClientRequest.get(`${Houshiar.baseURL}/conversations`).pipe(
+        HttpClientRequest.setHeader("authorization", authorization),
+        HttpClientRequest.setUrlParams({ limit: "20", offset: String(offset) }),
+      ),
+    )
+    .pipe(
+      Effect.flatMap(HttpClientResponse.schemaBodyJson(Schema.Struct({ data: Schema.Array(Houshiar.Conversation) }))),
+      Effect.timeout("20 seconds"),
+    )
 const Amount = Schema.optional(Schema.NullOr(Schema.Number))
 const Usage = Schema.Struct({
   authenticated: Schema.Boolean,
@@ -66,16 +102,12 @@ export const models = Effect.fn("Houshiar.models")(function* (
       const model = Model.Info.default(Provider.ID.make(Houshiar.id), Model.ID.make(remote.id))
       const isClaude = remote.id.toLowerCase().includes("claude")
       const context = Math.min(remote.context_length ?? model.limit.context, maxContext)
-      const output = Math.min(
-        remote.max_output_tokens ?? model.limit.output,
-        maxOutput,
-        context,
-      )
+      const output = Math.min(remote.max_output_tokens ?? model.limit.output, maxOutput, context)
       const configured: Model.Info = {
         ...model,
         name: remote.name || remote.id,
         // The gateway accepts the complete catalogue ID, including account/provider prefixes.
-        package: isClaude ? "@opencode/ai/providers/anthropic-compatible" : "@opencode/ai/providers/openai-compatible",
+        package: "@opencode/ai/providers/anthropic-compatible",
         settings: { baseURL: Houshiar.baseURL },
         limit: {
           context,
@@ -100,10 +132,12 @@ export const models = Effect.fn("Houshiar.models")(function* (
     .toSorted((a, b) => a.id.localeCompare(b.id))
 })
 
-export const fiveHour = Effect.fn("Houshiar.fiveHour")(function* (http: HttpClient.HttpClient, key: string, model?: string) {
-  const request = HttpClientRequest.get(`${Houshiar.baseURL}/usage/five-hour`).pipe(
-    HttpClientRequest.bearerToken(key),
-  )
+export const fiveHour = Effect.fn("Houshiar.fiveHour")(function* (
+  http: HttpClient.HttpClient,
+  key: string,
+  model?: string,
+) {
+  const request = HttpClientRequest.get(`${Houshiar.baseURL}/usage/five-hour`).pipe(HttpClientRequest.bearerToken(key))
   const response = yield* HttpClient.filterStatusOk(http)
     .execute(model ? HttpClientRequest.setUrlParam(request, "model", model) : request)
     .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Houshiar.FiveHourStatus)), Effect.timeout("20 seconds"))

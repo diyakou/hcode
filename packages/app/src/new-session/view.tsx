@@ -244,12 +244,21 @@ function NewSessionTips(props: { selection: ComposerModel["model"]["selection"];
   return (
     <>
       <div class="absolute inset-x-0 bottom-14 flex flex-col items-center gap-2 px-6">
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center justify-center gap-2">
           <Button variant="ghost" onClick={open}>
             {language.t("command.provider.connect")}
           </Button>
           <Button variant="ghost" disabled={refresh.loading} aria-busy={refresh.loading} onClick={() => void reload()}>
             {language.t("houshiar.models.refresh")}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={async () => {
+              const { HoushiarConversationsDialog } = await import("@/usage/conversations")
+              void dialog.show(() => <HoushiarConversationsDialog directory={sdk().directory} />)
+            }}
+          >
+            {language.t("houshiar.conversations.title")}
           </Button>
         </div>
         <Show when={refresh.error}>

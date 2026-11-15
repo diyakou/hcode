@@ -3,6 +3,13 @@ import { DESKTOP_NATIVE_ENGLISH } from "./desktop-native"
 export const dict = {
   "houshiar.welcome.title": "Welcome to Houshiar",
   "houshiar.models.refresh": "Reload models",
+  "houshiar.conversations.title": "Account conversations",
+  "houshiar.conversations.description": "Choose a saved conversation to continue on this device.",
+  "houshiar.conversations.empty": "No saved conversations.",
+  "houshiar.conversations.previous": "Previous",
+  "houshiar.conversations.next": "Next",
+  "houshiar.conversations.back": "Back to conversations",
+  "houshiar.conversations.continue": "Continue conversation",
   "experiment.voiceCalls": "Voice calls",
   "voice.call": "Call",
   "voice.mute": "Mute",

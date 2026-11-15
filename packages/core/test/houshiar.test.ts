@@ -6,7 +6,7 @@ import { Houshiar } from "@opencode/schema/houshiar"
 import { Model } from "@opencode/schema/model"
 import { it } from "./lib/effect"
 
-it.effect("loads gateway IDs without stripping prefixes and selects the matching wire protocol", () =>
+it.effect("loads gateway IDs without stripping prefixes and defaults every model to Messages", () =>
   Effect.gen(function* () {
     const http = HttpClient.make((request) => {
       expect(request.url).toBe(`${Houshiar.baseURL}/models`)
@@ -37,7 +37,7 @@ it.effect("loads gateway IDs without stripping prefixes and selects the matching
     expect(models[0].settings?.effort).toBe("high")
     expect(models[0].variants.map((v) => v.id)).toContain(Model.VariantID.make("high"))
     expect(models[0].variants.map((v) => v.id)).toContain(Model.VariantID.make("max"))
-    expect(models[1].package).toBe("@opencode/ai/providers/openai-compatible")
+    expect(models[1].package).toBe("@opencode/ai/providers/anthropic-compatible")
     expect(models.every((model) => model.settings?.baseURL === Houshiar.baseURL)).toBe(true)
   }),
 )

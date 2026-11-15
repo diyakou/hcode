@@ -1,4 +1,5 @@
 import { createSimpleContext } from "@opencode/ui/context"
+import { Houshiar } from "@opencode/schema/houshiar"
 import { base64Encode } from "@opencode/util/encode"
 import { useParams } from "@solidjs/router"
 import { batch, createEffect, createMemo, onCleanup } from "solid-js"
@@ -204,7 +205,18 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       }
     }
 
-    const fallback = createMemo(() => firstModel(configuredModel, recentModel, defaultModel))
+    const fallback = createMemo(() =>
+      firstModel(
+        configuredModel,
+        () => {
+          const model = { providerID: Houshiar.id, modelID: Houshiar.autoModel }
+
+          return validModel(model) ? model : undefined
+        },
+        recentModel,
+        defaultModel,
+      ),
+    )
 
     const durable = () => {
       const session = id()
