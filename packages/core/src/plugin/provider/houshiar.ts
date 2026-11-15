@@ -106,9 +106,6 @@ export const HoushiarPlugin = define({
 
     yield* ctx.provider.transform((providers) => {
       for (const item of providers.list()) providers.remove(item.provider.id)
-      const fallback =
-        discovered.current.models.find((model) => model.id === Houshiar.fallbackModel) ??
-        discovered.current.models.find((model) => model.id !== Houshiar.autoModel)
       providers.add({
         info: {
           id: Provider.ID.make(Houshiar.id),
@@ -118,12 +115,7 @@ export const HoushiarPlugin = define({
           package: "@opencode/ai/providers/anthropic-compatible",
           settings: { baseURL: Houshiar.baseURL, provider: Houshiar.id },
         },
-        models: fallback
-          ? [
-              { ...fallback, id: Model.ID.make(Houshiar.autoModel), name: "Auto (Experimental)", variants: [] },
-              ...discovered.current.models.filter((model) => model.id !== Houshiar.autoModel),
-            ]
-          : discovered.current.models,
+        models: discovered.current.models,
         sourceConnection: discovered.current.connection,
       })
     })

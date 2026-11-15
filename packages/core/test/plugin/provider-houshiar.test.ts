@@ -59,7 +59,7 @@ it.effect("keeps only Houshiar model access and API-key sign-in while preserving
       const bus = yield* Bus.Service
       const rpc = yield* Rpc.Service
       const credentials = yield* Credential.Service
-      const models = [{ id: "1hosh/claude-sonnet" }, { id: "j-gpt/gpt-model" }]
+      const models = [{ id: "1hosh/claude-sonnet" }, { id: "j-gpt/gpt-model" }, { id: "auto", name: "Gateway Auto" }]
       const http = HttpClient.make((request) => {
         expect(request.headers.authorization).toBe("Bearer saved-key")
         expect(request.url.startsWith(Houshiar.baseURL)).toBe(true)
@@ -106,10 +106,14 @@ it.effect("keeps only Houshiar model access and API-key sign-in while preserving
       expect(
         Array.from((yield* providers.snapshot()).records.get(Provider.ID.make(Houshiar.id))!.models.keys()),
       ).toEqual([
-        Model.ID.make(Houshiar.autoModel),
         Model.ID.make("1hosh/claude-sonnet"),
+        Model.ID.make(Houshiar.autoModel),
         Model.ID.make("j-gpt/gpt-model"),
       ])
+      expect(
+        (yield* providers.snapshot()).records.get(Provider.ID.make(Houshiar.id))?.models.get(Model.ID.make("auto"))
+          ?.name,
+      ).toBe("Gateway Auto")
       const catalog = yield* Model.Service
       expect((yield* catalog.default())?.id).toBe(Model.ID.make(Houshiar.autoModel))
       models.push({ id: "new-model" })
@@ -232,7 +236,7 @@ testEffect(Layer.empty).effect("lists account conversations and restores the sel
       Stream.filterEffect(() =>
         providers
           .snapshot()
-          .pipe(Effect.map((snapshot) => snapshot.records.get(Provider.ID.make(Houshiar.id))?.models.size === 2)),
+          .pipe(Effect.map((snapshot) => snapshot.records.get(Provider.ID.make(Houshiar.id))?.models.size === 1)),
       ),
       Stream.take(1),
       Stream.runDrain,
@@ -240,11 +244,16 @@ testEffect(Layer.empty).effect("lists account conversations and restores the sel
     )
     yield* HoushiarPlugin.effect(host).pipe(Effect.provideService(HttpClient.HttpClient, http))
     yield* Fiber.join(ready)
+    expect(
+      (yield* providers.snapshot()).records
+        .get(Provider.ID.make(Houshiar.id))
+        ?.models.has(Model.ID.make(Houshiar.autoModel)),
+    ).toBe(false)
     const client = rpc.client(Houshiar.Definition)
     expect(yield* client.conversations({ offset: 20 })).toEqual({ data: [remote] })
     expect((yield* client.conversation({ id: remote.id })).revision).toBe(3)
     const restored = yield* client.continueConversation({ id: remote.id })
-    expect((yield* sessions.get(restored.sessionID)).model?.id).toBe(Model.ID.make(Houshiar.autoModel))
+    expect((yield* sessions.get(restored.sessionID)).model?.id).toBe(Model.ID.make(Houshiar.fallbackModel))
     expect((yield* sessions.get(restored.sessionID)).metadata).toMatchObject({
       houshiarConversation: { id: remote.id, sessionID: restored.sessionID, protocol: "anthropic" },
     })

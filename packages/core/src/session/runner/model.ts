@@ -1,17 +1,13 @@
 export * as SessionRunnerModel from "./model.js"
 
 import { makeLocationNode } from "@opencode/util/effect/app-node"
-import { httpClient } from "@opencode/util/effect/app-node-platform"
 import { Houshiar } from "@opencode/schema/houshiar"
 import { LanguageModel } from "@opencode/ai/effect"
 import { Model } from "@opencode/schema/model"
 import { Provider } from "@opencode/schema/provider"
 import { Context, Effect, Layer, Schema } from "effect"
-import { HttpClient } from "effect/http"
-import { HoushiarAuto } from "../../houshiar-auto.js"
 import { HoushiarMemory } from "../../houshiar-memory.js"
 import { Agent } from "../../agent.js"
-import { Integration } from "../../integration.js"
 import { ModelResolver } from "../../model-resolver.js"
 import { SessionSchema } from "../schema.js"
 
@@ -44,7 +40,6 @@ export interface Interface {
   readonly resolve: (
     session: SessionSchema.Info,
     available: () => Effect.Effect<ReadonlyArray<Model.Info>>,
-    prompt?: { readonly id: string; readonly text: string },
   ) => Effect.Effect<Resolved, Error>
 }
 
@@ -80,11 +75,8 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const resolver = yield* ModelResolver.Service
     const agents = yield* Agent.Service
-    const http = yield* HttpClient.HttpClient
-    const integrations = yield* Integration.Service
-    const selections = new Map<string, { prompt: string; model: Model.Info }>()
     return Service.of({
-      resolve: Effect.fn("SessionRunnerModel.resolve")(function* (session, available, prompt) {
+      resolve: Effect.fn("SessionRunnerModel.resolve")(function* (session, available) {
         const conversation = HoushiarMemory.binding(session)
         const select = (model: Model.Info, variant?: Model.VariantID) =>
           resolver.resolveModel(
@@ -112,34 +104,6 @@ const layer = Layer.effect(
             if (resolved) return resolved.ref
             return yield* new ModelNotSelectedError({ sessionID: session.id })
           }))
-        if (requested.providerID === Houshiar.id && requested.id === Houshiar.autoModel) {
-          const candidates = (yield* available()).filter(
-            (model) => model.providerID === Houshiar.id && model.id !== Houshiar.autoModel,
-          )
-          const fallback = candidates.find((model) => model.id === Houshiar.fallbackModel) ?? candidates[0]
-          if (!fallback)
-            return yield* new ModelUnavailableError({
-              providerID: requested.providerID,
-              modelID: Model.ID.make(Houshiar.fallbackModel),
-            })
-          const cached = selections.get(session.id)
-          const selected =
-            cached &&
-            (!prompt || cached.prompt === prompt.id) &&
-            candidates.find((model) => model.id === cached.model.id)
-          if (selected) return yield* select(selected)
-          const routed = prompt
-            ? yield* Effect.gen(function* () {
-                const connection = yield* integrations.connection.active(Integration.ID.make(Houshiar.id))
-                const credential = connection ? yield* integrations.connection.resolve(connection) : undefined
-                if (credential?.type !== "key") return
-                return yield* HoushiarAuto.select(http, credential.key, candidates, prompt.text)
-              }).pipe(Effect.orElseSucceed(() => undefined))
-            : undefined
-          const model = routed ?? fallback
-          if (prompt) selections.set(session.id, { prompt: prompt.id, model })
-          return yield* select(model)
-        }
         const selected = (yield* available()).find(
           (model) => model.providerID === requested.providerID && model.id === requested.id,
         )
@@ -157,5 +121,5 @@ const layer = Layer.effect(
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [ModelResolver.node, Agent.node, Integration.node, httpClient],
+  deps: [ModelResolver.node, Agent.node],
 })
