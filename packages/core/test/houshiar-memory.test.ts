@@ -1,6 +1,6 @@
 import { expect } from "bun:test"
 import { Deferred, Effect, Fiber, Layer, Schema, Stream } from "effect"
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
+import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http"
 import { HoushiarMemory } from "@opencode/core/houshiar-memory"
 import { Houshiar } from "@opencode/schema/houshiar"
 import { Session } from "@opencode/core/session"
@@ -119,6 +119,54 @@ const harness = Effect.gen(function* () {
   })
   return { sessions, memory, remotes, calls, apiCalls, handler, request, create, admit }
 })
+
+it.effect("explains when a saved remote conversation is missing", () =>
+  Effect.gen(function* () {
+    const h = yield* harness
+    const session = yield* h.create()
+    yield* h.admit(session.id, "hello")
+    yield* h.memory
+      .middleware(session.id)(yield* h.request([{ role: "user", content: "hello" }]), h.handler)
+      .pipe(Effect.flatMap((response) => response.text))
+    h.remotes.clear()
+    const response = yield* h.memory.middleware(session.id)(
+      yield* h.request([{ role: "user", content: "continue" }]),
+      h.handler,
+    )
+    expect(yield* response.json).toMatchObject({
+      error: { code: "conversation_sync_failed", message: expect.stringContaining("Start a new conversation") },
+    })
+    expect(h.calls).toHaveLength(1)
+  }),
+)
+
+it.effect("preserves the gateway status without exposing response bodies or API keys", () =>
+  Effect.gen(function* () {
+    const h = yield* harness
+    const session = yield* h.create()
+    yield* h.admit(session.id, "hello")
+    for (const status of [401, 403, 404, 429, 503]) {
+      const response = yield* h.memory.middleware(session.id)(
+        yield* h.request([{ role: "user", content: "hello" }]),
+        (request) =>
+          Effect.fail(
+            new HttpClientError.HttpClientError({
+              reason: new HttpClientError.StatusCodeError({
+                request,
+                response: HttpClientResponse.fromWeb(request, new Response("private gateway details", { status })),
+              }),
+            }),
+          ),
+      )
+      const body = yield* response.text
+      expect(body).toContain(`HTTP ${status}`)
+      expect(body).not.toContain("user-key")
+      expect(body).not.toContain("private gateway details")
+      if (status === 401 || status === 403) expect(body).toContain("Reconnect")
+      if (status === 404) expect(body).not.toContain("Start a new conversation")
+    }
+  }),
+)
 
 it.effect("adopts legacy root chat IDs while giving legacy children independent conversations", () =>
   Effect.gen(function* () {

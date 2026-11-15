@@ -5,8 +5,8 @@ import { Session } from "@opencode/schema/session"
 import { makeGlobalNode } from "@opencode/util/effect/app-node"
 import { httpClient } from "@opencode/util/effect/app-node-platform"
 import type { HttpMiddleware } from "@opencode/ai/route"
-import { Context, Effect, Exit, Layer, Option, Schema, Scope, Semaphore, Stream, Struct } from "effect"
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
+import { Cause, Context, Effect, Exit, Layer, Option, Schema, Scope, Semaphore, Stream, Struct } from "effect"
+import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http"
 import { Bus } from "./bus.js"
 import { HoushiarGateway } from "./houshiar.js"
 import { SessionEvent } from "./session/event.js"
@@ -193,9 +193,7 @@ export const layer = Layer.effect(
           }).pipe(
             Effect.onExit((exit) => (Exit.isFailure(exit) ? Scope.close(scope, exit) : Effect.void)),
             Effect.mapError((error) =>
-              error instanceof SyncError
-                ? error
-                : new SyncError({ message: "Unable to synchronize Houshiar conversation history" }),
+              error instanceof SyncError ? error : new SyncError({ message: syncMessage(error) }),
             ),
             Effect.catchTag("HoushiarMemory.SyncError", (error) =>
               Effect.succeed(
@@ -219,6 +217,27 @@ export const layer = Layer.effect(
     })
   }),
 )
+
+function syncMessage(error: unknown) {
+  if (HttpClientError.isHttpClientError(error)) {
+    if (error.reason._tag === "StatusCodeError") {
+      const status = error.reason.response.status
+      if (status === 401 || status === 403)
+        return `Houshiar rejected access to this conversation (HTTP ${status}). Reconnect your Houshiar API key.`
+      if (status === 404 && new URL(error.request.url).pathname.startsWith("/v1/conversations/"))
+        return "This Houshiar conversation is no longer available (HTTP 404). Start a new conversation."
+      return `Unable to synchronize Houshiar conversation history: the gateway returned HTTP ${status}. Retry your message.`
+    }
+    if (error.reason._tag === "TransportError")
+      return "Unable to reach Houshiar while synchronizing conversation history. Check your network connection and retry."
+    return `Unable to synchronize Houshiar conversation history (${error.reason._tag}). Retry your message.`
+  }
+  if (Cause.isTimeoutError(error))
+    return "Houshiar conversation history synchronization timed out. Check your connection and retry."
+  if (Schema.isSchemaError(error))
+    return "Unable to synchronize Houshiar conversation history: the gateway returned an invalid conversation response."
+  return "Unable to synchronize Houshiar conversation history"
+}
 
 function toolResults(message: typeof Message.Type) {
   return (
