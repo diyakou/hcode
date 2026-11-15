@@ -6819,27 +6819,39 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests).toHaveLength(1)
   })
 
-  scenario("stops repeated failed skill calls and allows a new prompt to try again", function* (s) {
-    yield* s.llm.push(
-      TestLLM.toolCall("skill-1", "skill", { id: "missing" }),
-      TestLLM.toolCall("skill-2", "skill", { id: "missing" }),
-      TestLLM.toolCall("skill-3", "skill", { id: "missing" }),
-    )
+  scenario(
+    "continues with other tools after repeated failed skill calls and allows a new prompt to try again",
+    function* (s) {
+      yield* s.llm.push(
+        TestLLM.toolCall("skill-1", "skill", { id: "missing" }),
+        TestLLM.toolCall("skill-2", "skill", { id: "missing" }),
+        TestLLM.toolCall("skill-3", "skill", { id: "missing" }),
+        TestLLM.toolCall("echo-recovery", "echo", { text: "Recovered without the skill" }),
+        TestLLM.stop(),
+      )
 
-    expect((yield* s.runPrompt("Use the missing skill").pipe(Effect.flip)).message).toContain(
-      'Stopped after three consecutive failed attempts to load skill "missing"',
-    )
-    expect(s.requests).toHaveLength(3)
-    expect((yield* s.context).flatMap((message) => message.type === "assistant" ? message.content : []).filter(
-      (part) => part.type === "tool" && part.name === "skill" && part.state.status === "error",
-    )).toHaveLength(3)
+      yield* s.runPrompt("Use the missing skill")
+      expect(s.requests).toHaveLength(5)
+      expect(s.requests[3]?.tools.some((tool) => tool.name === "skill")).toBeFalse()
+      expect(s.requests[3]?.tools.some((tool) => tool.name === "echo")).toBeTrue()
+      expect(
+        s.requests[3]?.system.some((part) => part.text.includes("Continue the user's request using your other tools")),
+      ).toBeTrue()
+      expect(s.executions).toEqual(["Recovered without the skill"])
+      expect(
+        (yield* s.context)
+          .flatMap((message) => (message.type === "assistant" ? message.content : []))
+          .filter((part) => part.type === "tool" && part.name === "skill" && part.state.status === "error"),
+      ).toHaveLength(3)
 
-    yield* s.llm.push(TestLLM.toolCall("skill-retry", "skill", { id: "missing" }), TestLLM.stop())
-    yield* s.runPrompt("Try again")
-    expect(s.requests).toHaveLength(5)
-  })
+      yield* s.llm.push(TestLLM.toolCall("skill-retry", "skill", { id: "missing" }), TestLLM.stop())
+      yield* s.runPrompt("Try again")
+      expect(s.requests).toHaveLength(7)
+      expect(s.requests[5]?.tools.some((tool) => tool.name === "skill")).toBeTrue()
+    },
+  )
 
-  scenario("stops repeated failed skill calls with an image attachment", function* (s) {
+  scenario("continues after repeated failed skill calls with an image attachment", function* (s) {
     const image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
     yield* s.session.prompt({
       sessionID,
@@ -6851,9 +6863,11 @@ describe("SessionRunnerLLM", () => {
       TestLLM.toolCall("image-skill-1", "skill", { id: "missing" }),
       TestLLM.toolCall("image-skill-2", "skill", { id: "missing" }),
       TestLLM.toolCall("image-skill-3", "skill", { id: "missing" }),
+      TestLLM.stop(),
     )
-    expect((yield* s.resume.pipe(Effect.flip)).message).toContain("Stopped after three consecutive failed attempts")
-    expect(s.requests).toHaveLength(3)
+    yield* s.resume
+    expect(s.requests).toHaveLength(4)
+    expect(s.requests[3]?.tools.some((tool) => tool.name === "skill")).toBeFalse()
     expect(s.requests[0]?.messages.some((message) => message.content.some((part) => part.type === "media"))).toBeTrue()
   })
 

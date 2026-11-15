@@ -22,6 +22,7 @@ export const description = [
   "Load a specialized skill's instructions and resources into the current conversation when the task at hand matches its description.",
   "",
   "The skill ID must match an available skill or a skill explicitly referenced by the user.",
+  "Do not load a skill just because its name resembles the current model or provider. Use the supplied model identity to answer questions about the current model.",
   "Use the exact ID from available_skills, not a provider name, model name, or display name. If a skill is unavailable, do not repeat the same call; use an available relevant skill or continue with the tools you have.",
 ].join("\n")
 

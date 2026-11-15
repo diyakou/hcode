@@ -26,6 +26,7 @@ const render = (skills: ReadonlyArray<Summary>) =>
   [
     "Skills provide specialized instructions and workflows for specific tasks.",
     "Use the skill tool to load a skill when a task matches its description.",
+    "Skills are optional unless the user explicitly invokes one or its description applies. Questions about the current model or provider do not by themselves require a skill; use the supplied model identity for those facts.",
     "Pass its exact <id>, not its display name or a model/provider name. Do not repeatedly request an unavailable skill; continue with available tools when no skill applies.",
     "The user may also invoke a skill directly. When that happens, its instructions appear in the conversation as a <skill_content> block, the same shape the skill tool returns. A skill that is already present this way does not need to be invoked again.",
     ...(skills.length === 0

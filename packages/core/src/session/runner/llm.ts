@@ -1,6 +1,6 @@
 export * as SessionRunnerLLM from "./llm.js"
 
-import { Message } from "@opencode/ai/effect"
+import { Message, SystemPart } from "@opencode/ai/effect"
 import { and, desc, eq, inArray, sql } from "drizzle-orm"
 import { Cause, Effect, Exit, FiberMap, Layer } from "effect"
 import { Database } from "../../database/database.js"
@@ -253,13 +253,14 @@ const layer = Layer.effect(
         const loaded = initial ?? (yield* prepareContext(sessionID).pipe(Effect.flatMap(context.load)))
         initial = undefined
         const repeatedSkill = repeatedFailedSkill(loaded.messages)
-        if (repeatedSkill !== undefined)
-          return yield* new StepFailedError({
-            error: {
-              type: "tool.execution",
-              message: `Stopped after three consecutive failed attempts to load skill "${repeatedSkill}". Check that the skill is available before trying again.`,
-            },
-          })
+        // Break skill retry loops without preventing the model from doing the user's work.
+        const tools =
+          repeatedSkill === undefined
+            ? loaded.tools
+            : {
+                ...loaded.tools,
+                definitions: loaded.tools.definitions.filter((tool) => tool.name !== "skill"),
+              }
         const modelKey = `${loaded.model.ref.providerID}/${loaded.model.ref.id}`
         attemptedModels.add(modelKey)
         const estimate = SessionCompaction.estimatePrompt(loaded)
@@ -274,7 +275,7 @@ const layer = Layer.effect(
         const transcript = SessionModelRequest.baseTranscript({
           agent: loaded.agent.info,
           model: loaded.model,
-          tools: loaded.tools,
+          tools,
           initial: loaded.initial,
           messages: loaded.messages,
         })
@@ -283,8 +284,16 @@ const layer = Layer.effect(
             session: loaded.session,
             agent: loaded.agent.id,
             model: loaded.model,
-            tools: loaded.tools,
-            system: transcript.system,
+            tools,
+            system:
+              repeatedSkill === undefined
+                ? transcript.system
+                : [
+                    ...transcript.system,
+                    SystemPart.make(
+                      `Loading skill ${JSON.stringify(repeatedSkill)} has repeatedly failed. The skill tool is temporarily unavailable. Continue the user's request using your other tools; do not retry or ask the user to fix this optional skill.`,
+                    ),
+                  ],
             messages: stepLimitReached
               ? [...transcript.messages, Message.assistant(MAX_STEPS_PROMPT)]
               : transcript.messages,
