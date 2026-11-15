@@ -54,7 +54,13 @@ describe("SkillTool", () => {
           ...toolIdentity,
           call: { type: "tool-call", id: "call-policy-denied-skill", name: "skill", input: { id: "private" } },
         }),
-      ).toEqual({ status: "error", error: { type: "tool.execution", message: "Unable to load skill private" } })
+      ).toEqual({
+        status: "error",
+        error: {
+          type: "tool.execution",
+          message: expect.stringContaining('Skill ID "private" is not available. Do not call this ID again'),
+        },
+      })
     }).pipe(
       Effect.provide(
         AppNodeBuilder.build(LayerNode.group([Tool.node, skillToolNode, Skill.node, Config.node, Bus.node]), [
@@ -158,8 +164,25 @@ describe("SkillTool", () => {
               }),
             ).toEqual({
               status: "error",
-              error: { type: "tool.execution", message: "Unable to load skill missing" },
+              error: {
+                type: "tool.execution",
+                message: expect.stringContaining('Skill ID "missing" is not available. Do not call this ID again'),
+              },
             })
+            expect(
+              yield* executeTool(registry, {
+                sessionID,
+                ...toolIdentity,
+                call: { type: "tool-call", id: "call-provider-as-skill", name: "skill", input: { id: "Anthropic" } },
+              }),
+            ).toMatchObject({
+              status: "error",
+              error: {
+                type: "tool.execution",
+                message: expect.stringContaining("A provider or model name is not a skill ID"),
+              },
+            })
+            expect(assertions).toHaveLength(2)
             deny = true
             expect(
               yield* executeTool(registry, {

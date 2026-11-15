@@ -22,6 +22,7 @@ export const description = [
   "Load a specialized skill's instructions and resources into the current conversation when the task at hand matches its description.",
   "",
   "The skill ID must match an available skill or a skill explicitly referenced by the user.",
+  "Use the exact ID from available_skills, not a provider name, model name, or display name. If a skill is unavailable, do not repeat the same call; use an available relevant skill or continue with the tools you have.",
 ].join("\n")
 
 export const toModelOutput = Skill.toModelOutput
@@ -46,7 +47,15 @@ export const Plugin = {
           execute: (input, context) =>
             Effect.gen(function* () {
               const skill = yield* skills.get(input.id)
-              if (!skill) return yield* unableToLoad(input.id)
+              if (!skill) {
+                return yield* new ToolFailure({
+                  message: [
+                    `Skill ID "${input.id}" is not available. Do not call this ID again unless the available skills change.`,
+                    "Use an exact <id> from the current <available_skills> list.",
+                    "A provider or model name is not a skill ID. Continue with your existing tools if no listed skill fits the task.",
+                  ].join("\n"),
+                })
+              }
               return yield* Effect.gen(function* () {
                 yield* permission.assert({
                   action: name,

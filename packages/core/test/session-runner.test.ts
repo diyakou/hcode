@@ -58,6 +58,10 @@ import { PluginPromise } from "@opencode/core/plugin/promise"
 import { OptimizePlugin } from "@opencode/core/plugin/optimize"
 import { IdentityPlugin } from "@opencode/core/plugin/identity"
 import { QuestionTool } from "@opencode/core/tool/plugin/question"
+import { SkillTool } from "@opencode/core/tool/plugin/skill"
+import { Skill } from "@opencode/core/skill"
+import { FSUtil } from "@opencode/util/fs-util"
+import { registerToolPlugin } from "./lib/tool"
 import { Agent } from "@opencode/core/agent"
 import { Config } from "@opencode/core/config"
 import { Document, Info } from "@opencode/schema/config"
@@ -330,6 +334,11 @@ const layer = Layer.unwrap(
       ),
     )
     const echoNode = makeLocationNode({ name: "test/session-runner-tools", layer: echo, deps: [Tool.node] })
+    const skillNode = makeLocationNode({
+      name: "test/session-runner-skill",
+      layer: Layer.effectDiscard(registerToolPlugin(SkillTool.Plugin)),
+      deps: [Tool.node, FSUtil.node, Skill.node, Permission.node],
+    })
     const models = Layer.mock(SessionRunnerModel.Service)({
       resolve: (session) =>
         state.modelResolveHook.pipe(
@@ -481,9 +490,11 @@ const layer = Layer.unwrap(
         Agent.node,
         Model.node,
         Tool.node,
+        Skill.node,
         PluginHooks.node,
         Job.node,
         echoNode,
+        skillNode,
         SessionRunnerModel.node,
         InstructionBuiltIns.node,
         InstructionDiscovery.node,
@@ -1454,7 +1465,7 @@ describe("SessionRunnerLLM", () => {
 
     expect(s.requests).toHaveLength(1)
     expect(s.requests[0]?.model).toBe(model)
-    expect(s.requests[0]?.tools.map((tool) => tool.name)).toEqual(["defect", "echo", "storefail"])
+    expect(s.requests[0]?.tools.map((tool) => tool.name)).toEqual(["defect", "echo", "skill", "storefail"])
     expect(s.requests[0]?.messages.map((message) => ({ role: message.role, content: message.content }))).toEqual([
       { role: "user", content: [{ type: "text", text: "First" }] },
       { role: "user", content: [{ type: "text", text: "Second" }] },
@@ -3955,7 +3966,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.resume
 
     expect(s.requests).toHaveLength(1)
-    expect(s.requests[0]?.tools.map((tool) => tool.name)).toEqual(["defect", "echo", "storefail"])
+    expect(s.requests[0]?.tools.map((tool) => tool.name)).toEqual(["defect", "echo", "skill", "storefail"])
     expect(yield* s.context).toMatchObject([
       Expected.user("Use tools"),
       {
@@ -6806,6 +6817,59 @@ describe("SessionRunnerLLM", () => {
       content: [Expected.failedTool({ id: "call-malformed", executed: false }, { error: { type: "tool.input-json" } })],
     })
     expect(s.requests).toHaveLength(1)
+  })
+
+  scenario("stops repeated failed skill calls and allows a new prompt to try again", function* (s) {
+    yield* s.llm.push(
+      TestLLM.toolCall("skill-1", "skill", { id: "missing" }),
+      TestLLM.toolCall("skill-2", "skill", { id: "missing" }),
+      TestLLM.toolCall("skill-3", "skill", { id: "missing" }),
+    )
+
+    expect((yield* s.runPrompt("Use the missing skill").pipe(Effect.flip)).message).toContain(
+      'Stopped after three consecutive failed attempts to load skill "missing"',
+    )
+    expect(s.requests).toHaveLength(3)
+    expect((yield* s.context).flatMap((message) => message.type === "assistant" ? message.content : []).filter(
+      (part) => part.type === "tool" && part.name === "skill" && part.state.status === "error",
+    )).toHaveLength(3)
+
+    yield* s.llm.push(TestLLM.toolCall("skill-retry", "skill", { id: "missing" }), TestLLM.stop())
+    yield* s.runPrompt("Try again")
+    expect(s.requests).toHaveLength(5)
+  })
+
+  scenario("stops repeated failed skill calls with an image attachment", function* (s) {
+    const image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    yield* s.session.prompt({
+      sessionID,
+      text: "Use the missing skill for this image",
+      files: [{ uri: `data:image/png;base64,${image}` }],
+      resume: false,
+    })
+    yield* s.llm.push(
+      TestLLM.toolCall("image-skill-1", "skill", { id: "missing" }),
+      TestLLM.toolCall("image-skill-2", "skill", { id: "missing" }),
+      TestLLM.toolCall("image-skill-3", "skill", { id: "missing" }),
+    )
+    expect((yield* s.resume.pipe(Effect.flip)).message).toContain("Stopped after three consecutive failed attempts")
+    expect(s.requests).toHaveLength(3)
+    expect(s.requests[0]?.messages.some((message) => message.content.some((part) => part.type === "media"))).toBeTrue()
+  })
+
+  scenario("does not stop on different skills or intervening successful tools", function* (s) {
+    yield* s.llm.push(
+      TestLLM.toolCall("skill-a-1", "skill", { id: "a" }),
+      TestLLM.toolCall("skill-a-2", "skill", { id: "a" }),
+      TestLLM.toolCall("skill-b", "skill", { id: "b" }),
+      TestLLM.toolCall("skill-a-3", "skill", { id: "a" }),
+      TestLLM.toolCall("echo-between", "echo", { text: "progress" }),
+      TestLLM.toolCall("skill-a-4", "skill", { id: "a" }),
+      TestLLM.stop(),
+    )
+    yield* s.runPrompt("Try different skills")
+    expect(s.requests).toHaveLength(7)
+    expect(s.executions).toEqual(["progress"])
   })
 
   scenario("continues after repeated malformed tool input", function* (s) {

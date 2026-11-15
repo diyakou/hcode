@@ -116,7 +116,7 @@ const layer = Layer.effect(
           const candidates = (yield* available()).filter(
             (model) => model.providerID === Houshiar.id && model.id !== Houshiar.autoModel,
           )
-          const fallback = candidates.find((model) => model.id === Houshiar.fallbackModel)
+          const fallback = candidates.find((model) => model.id === Houshiar.fallbackModel) ?? candidates[0]
           if (!fallback)
             return yield* new ModelUnavailableError({
               providerID: requested.providerID,

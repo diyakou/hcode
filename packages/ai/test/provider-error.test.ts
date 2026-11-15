@@ -361,6 +361,24 @@ describe("provider error classification", () => {
     })
   })
 
+  test("recognizes conversation conflicts forwarded only as a provider message", () => {
+    const message = 'Provider request failed with HTTP 409: {"code":"conversation_history_conflict"}'
+    const reason = classifyProviderFailure({ message })
+    expect(reason._tag).toBe("InvalidRequest")
+    expect(isRetryable(new AIError({ reason }))).toBe(false)
+    const transient = classifyProviderFailure({
+      message: "Internal error",
+      status: 500,
+      rawBody: '{"code":"conversation_history_conflict"}',
+      http: new HttpContext({
+        url: "https://gateway.test/v1/messages",
+        status: 500,
+        headers: { "x-should-retry": "true" },
+      }),
+    })
+    expect(isRetryable(new AIError({ reason: transient }))).toBe(false)
+  })
+
   test("classifies transient client statuses as provider internal", () => {
     expect([408, 409].map((status) => classifyProviderFailure({ message: `HTTP ${status}`, status })._tag)).toEqual([
       "ProviderInternal",

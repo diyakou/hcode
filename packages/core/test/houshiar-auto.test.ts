@@ -83,8 +83,12 @@ it.effect("keeps Auto selection per prompt and falls back when the router fails"
       )
       expect(requests).toHaveLength(2)
       expect(
-        (yield* resolver.resolve(session, () => Effect.succeed([models[0]!]), prompt).pipe(Effect.flip))._tag,
-      ).toBe("SessionRunnerModel.ModelUnavailableError")
+        (yield* resolver.resolve(session, () => Effect.succeed([models[0]!]), { id: "missing-fallback", text: "task" }))
+          .ref.id,
+      ).toBe(models[0]!.id)
+      expect((yield* resolver.resolve(session, () => Effect.succeed([]), prompt).pipe(Effect.flip))._tag).toBe(
+        "SessionRunnerModel.ModelUnavailableError",
+      )
       expect(
         (yield* resolver.resolve(
           { ...session, model: Model.Ref.make({ providerID: models[0]!.providerID, id: models[0]!.id }) },

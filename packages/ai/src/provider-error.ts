@@ -82,6 +82,8 @@ export const isContextOverflow = (message: string) =>
 
 const isPayloadTooLarge = (message: string) => payloadPatterns.some((pattern) => pattern.test(message))
 
+const CONVERSATION_CONFLICT = /\bconversation_(?:history_conflict|revision_conflict|protocol_mismatch)\b/
+
 export const isContextOverflowFailure = (failure: unknown) =>
   failure instanceof AIError
     ? failure.reason._tag === "InvalidRequest" && failure.reason.classification === "context-overflow"
@@ -92,6 +94,8 @@ export const isContextOverflowFailure = (failure: unknown) =>
  * not deliver an accepted write, and unrecognized failures. Callers decide which calls are safe to repeat.
  */
 export const isRetryable = (error: AIError) => {
+  if (CONVERSATION_CONFLICT.test(error.reason.body ?? "") || CONVERSATION_CONFLICT.test(error.reason.message))
+    return false
   if (error.reason._tag === "InvalidRequest" && error.reason.http?.status === 409) return false
   const override = error.reason.http?.headers["x-should-retry"]
   if (override === "true") return true
@@ -268,6 +272,10 @@ export function classifyProviderFailure(input: ProviderFailure): AIError["reason
   // (e.g. overflow phrases nested in a JSON error body) still classify.
   const text = [input.message, body].filter((value) => value.length > 0).join("\n")
   const clientScoped = input.status === undefined || (input.status >= 400 && input.status < 500)
+
+  // Some gateways preserve the conflict only in the message and omit structured status/body fields.
+  if (codes.some((code) => CONVERSATION_CONFLICT.test(code)) || CONVERSATION_CONFLICT.test(text))
+    return new InvalidRequestError(details)
 
   const overflowByGateway = [input.data, body, input.message].some(gatewayContextOverflow)
   const isPlanOverflow =

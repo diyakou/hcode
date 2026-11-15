@@ -151,6 +151,18 @@ it.effect("keeps Anthropic tool-result deltas and rejects a protocol switch with
     yield* h.memory
       .middleware(session.id)(yield* h.request([{ role: "user", content: "inspect" }], "anthropic"), h.handler)
       .pipe(Effect.flatMap((response) => response.text))
+    const remote = h.remotes.get("remote_1")!
+    const serverMessages: typeof Houshiar.ConversationHistory.Type.messages = [
+      { role: "user", content: "inspect" },
+      {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "server reasoning", signature: "server-signature" },
+          { type: "tool_use", id: "call_1", name: "read", input: {} },
+        ],
+      },
+    ]
+    h.remotes.set(remote.id, { ...remote, messages: serverMessages })
     const result = { role: "user", content: [{ type: "tool_result", tool_use_id: "call_1", content: "file contents" }] }
     yield* h.memory
       .middleware(session.id)(
@@ -165,7 +177,7 @@ it.effect("keeps Anthropic tool-result deltas and rejects a protocol switch with
         h.handler,
       )
       .pipe(Effect.flatMap((response) => response.text))
-    expect(h.calls[1]?.body.messages).toEqual([result])
+    expect(h.calls[1]?.body.messages).toEqual([...serverMessages, result])
     const wrongProtocol = yield* h.memory.middleware(session.id)(
       yield* h.request([{ role: "user", content: "inspect" }]),
       h.handler,
@@ -220,6 +232,48 @@ it.effect("releases the conversation lock when a response is cancelled", () =>
       .middleware(session.id)(request, h.handler)
       .pipe(Effect.flatMap((response) => response.text))
     expect(h.calls).toHaveLength(1)
+  }),
+)
+
+it.effect("does not repeat an anchored subagent tool request when the backend history has not changed", () =>
+  Effect.gen(function* () {
+    const h = yield* harness
+    const parent = yield* h.create()
+    const child = yield* h.sessions.create({ parentID: parent.id })
+    yield* h.admit(child.id, "Inspect the repository")
+    yield* h.memory
+      .middleware(child.id)(
+        yield* h.request([{ role: "user", content: "Inspect the repository" }], "anthropic"),
+        h.handler,
+      )
+      .pipe(Effect.flatMap((response) => response.text))
+    const remote = h.remotes.get("remote_1")!
+    const history: typeof Houshiar.ConversationHistory.Type.messages = [
+      { role: "user", content: "Inspect the repository" },
+      {
+        role: "assistant",
+        content: [{ type: "tool_use", id: "glob_1", name: "glob", input: { pattern: "**/package.json" } }],
+      },
+    ]
+    h.remotes.set(remote.id, { ...remote, messages: history })
+    const result = { role: "user", content: [{ type: "tool_result", tool_use_id: "glob_1", content: "package.json" }] }
+    const sent: Array<typeof Wire.Type> = []
+    const response = yield* h.memory.middleware(child.id)(
+      yield* h.request([...history, result], "anthropic"),
+      (request) =>
+        Effect.gen(function* () {
+          sent.push(yield* read(request))
+          return HttpClientResponse.fromWeb(
+            request,
+            Response.json({ error: { code: "conversation_history_conflict" } }, { status: 409 }),
+          )
+        }),
+    )
+    expect(response.status).toBe(409)
+    yield* response.text
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.messages).toEqual([...history, result])
+    expect((yield* h.sessions.get(parent.id)).metadata).toBeUndefined()
   }),
 )
 
@@ -280,6 +334,7 @@ it.effect("keeps tool results in the same conversation without replaying the use
     yield* h.memory
       .middleware(session.id)(yield* h.request([{ role: "user", content: "inspect" }]), h.handler)
       .pipe(Effect.flatMap((response) => response.text))
+    const serverMessages = h.remotes.get("remote_1")!.messages
     const result = { role: "tool", tool_call_id: "call_1", content: "file contents" }
     yield* h.memory
       .middleware(session.id)(
@@ -295,7 +350,8 @@ it.effect("keeps tool results in the same conversation without replaying the use
         h.handler,
       )
       .pipe(Effect.flatMap((response) => response.text))
-    expect(h.calls[1]?.body.messages).toEqual([result])
+    expect(h.calls[1]?.body.messages).toEqual([...serverMessages, result])
+    const updatedServerMessages = h.remotes.get("remote_1")!.messages
     yield* h.admit(session.id, "steer one")
     yield* h.admit(session.id, "steer two")
     yield* h.memory
@@ -311,6 +367,7 @@ it.effect("keeps tool results in the same conversation without replaying the use
       )
       .pipe(Effect.flatMap((response) => response.text))
     expect(h.calls[2]?.body.messages).toEqual([
+      ...updatedServerMessages,
       result,
       { role: "user", content: "steer one" },
       { role: "user", content: "steer two" },

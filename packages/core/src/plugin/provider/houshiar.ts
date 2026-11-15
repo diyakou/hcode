@@ -106,7 +106,9 @@ export const HoushiarPlugin = define({
 
     yield* ctx.provider.transform((providers) => {
       for (const item of providers.list()) providers.remove(item.provider.id)
-      const fallback = discovered.current.models.find((model) => model.id === Houshiar.fallbackModel)
+      const fallback =
+        discovered.current.models.find((model) => model.id === Houshiar.fallbackModel) ??
+        discovered.current.models.find((model) => model.id !== Houshiar.autoModel)
       providers.add({
         info: {
           id: Provider.ID.make(Houshiar.id),

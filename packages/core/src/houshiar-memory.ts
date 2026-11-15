@@ -34,6 +34,7 @@ const decodeConflict = Schema.decodeUnknownOption(
     Schema.Union([
       Schema.Struct({ code: Schema.String }),
       Schema.Struct({ detail: Schema.Struct({ code: Schema.String }) }),
+      Schema.Struct({ error: Schema.Struct({ code: Schema.String }) }),
     ]),
   ),
 )
@@ -146,7 +147,10 @@ export const layer = Layer.effect(
                   HttpClientRequest.setHeader("x-memory-revision", String(history.revision)),
                 ),
               ).pipe(Effect.flatMap(handler))
-            const initial = yield* send(snapshot, false)
+            // Tool continuations must anchor to the backend's own assistant message. Its tool-call
+            // blocks and reasoning metadata can differ from the transcript reconstructed locally.
+            const continuation = delta.some((message) => message.role === "tool" || toolResults(message))
+            const initial = yield* send(snapshot, continuation)
             const rejected = initial.status === 409 ? yield* initial.text : undefined
             const unchanged =
               rejected === undefined
@@ -156,12 +160,16 @@ export const layer = Layer.effect(
                     new Response(rejected, { status: initial.status, headers: initial.headers }),
                   )
             const conflict = rejected !== undefined ? Option.getOrUndefined(decodeConflict(rejected)) : undefined
-            const code = conflict && ("detail" in conflict ? conflict.detail.code : conflict.code)
+            const code =
+              conflict &&
+              ("detail" in conflict ? conflict.detail.code : "error" in conflict ? conflict.error.code : conflict.code)
             const response =
               code === "conversation_history_conflict" || code === "conversation_revision_conflict"
                 ? yield* HoushiarGateway.conversation(http, authorization, identity.id).pipe(
                     Effect.flatMap((fresh) =>
-                      fresh.revision === snapshot.revision && fresh.messages.length === 0
+                      fresh.revision === snapshot.revision &&
+                      (fresh.messages.length === 0 ||
+                        (continuation && JSON.stringify(fresh.messages) === JSON.stringify(snapshot.messages)))
                         ? Effect.succeed(unchanged)
                         : send(fresh, true),
                     ),

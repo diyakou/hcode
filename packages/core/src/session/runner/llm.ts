@@ -252,6 +252,14 @@ const layer = Layer.effect(
         // Reuse boundary preparation once; retries refresh context without delivering more input.
         const loaded = initial ?? (yield* prepareContext(sessionID).pipe(Effect.flatMap(context.load)))
         initial = undefined
+        const repeatedSkill = repeatedFailedSkill(loaded.messages)
+        if (repeatedSkill !== undefined)
+          return yield* new StepFailedError({
+            error: {
+              type: "tool.execution",
+              message: `Stopped after three consecutive failed attempts to load skill "${repeatedSkill}". Check that the skill is available before trying again.`,
+            },
+          })
         const modelKey = `${loaded.model.ref.providerID}/${loaded.model.ref.id}`
         attemptedModels.add(modelKey)
         const estimate = SessionCompaction.estimatePrompt(loaded)
@@ -477,6 +485,23 @@ const layer = Layer.effect(
     return Service.of({ drain })
   }),
 )
+
+function repeatedFailedSkill(messages: ReadonlyArray<SessionMessage.Info>) {
+  let id: string | undefined
+  let count = 0
+  for (const message of messages.toReversed()) {
+    if (message.type === "user" || message.type === "synthetic") break
+    if (message.type !== "assistant") continue
+    for (const part of message.content.toReversed()) {
+      if (part.type !== "tool") continue
+      if (part.name !== "skill" || part.executed || part.state.status !== "error") return
+      if (typeof part.state.input.id !== "string") return
+      if (id !== undefined && id !== part.state.input.id) return
+      id = part.state.input.id
+      if (++count === 3) return id
+    }
+  }
+}
 
 export const node = makeLocationNode({
   service: Service,

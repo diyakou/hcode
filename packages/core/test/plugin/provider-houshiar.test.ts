@@ -59,7 +59,7 @@ it.effect("keeps only Houshiar model access and API-key sign-in while preserving
       const bus = yield* Bus.Service
       const rpc = yield* Rpc.Service
       const credentials = yield* Credential.Service
-      const models = [{ id: "1hosh/claude-sonnet" }, { id: "j-gpt/gpt-model" }, { id: Houshiar.fallbackModel }]
+      const models = [{ id: "1hosh/claude-sonnet" }, { id: "j-gpt/gpt-model" }]
       const http = HttpClient.make((request) => {
         expect(request.headers.authorization).toBe("Bearer saved-key")
         expect(request.url.startsWith(Houshiar.baseURL)).toBe(true)
@@ -87,7 +87,7 @@ it.effect("keeps only Houshiar model access and API-key sign-in while preserving
         Stream.filterEffect(() =>
           providers
             .snapshot()
-            .pipe(Effect.map((snapshot) => snapshot.records.get(Provider.ID.make(Houshiar.id))?.models.size === 4)),
+            .pipe(Effect.map((snapshot) => snapshot.records.get(Provider.ID.make(Houshiar.id))?.models.size === 3)),
         ),
         Stream.take(1),
         Stream.runDrain,
@@ -109,7 +109,6 @@ it.effect("keeps only Houshiar model access and API-key sign-in while preserving
         Model.ID.make(Houshiar.autoModel),
         Model.ID.make("1hosh/claude-sonnet"),
         Model.ID.make("j-gpt/gpt-model"),
-        Model.ID.make(Houshiar.fallbackModel),
       ])
       const catalog = yield* Model.Service
       expect((yield* catalog.default())?.id).toBe(Model.ID.make(Houshiar.autoModel))
