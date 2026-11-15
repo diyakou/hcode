@@ -4,7 +4,7 @@ import { Schema } from "effect"
 import { Rpc } from "./rpc.js"
 
 export const id = "houshiar"
-export const baseURL = "https://wqai.morvism.ir/v1"
+export const baseURL = "https://api.houshiar-ai.ir/v1"
 
 export const FiveHourStatus = Schema.Struct({
   managed: Schema.Boolean,

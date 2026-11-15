@@ -12,7 +12,7 @@ export function Logo() {
         Houshiar
       </text>
       <Show when={dimensions().width >= 24 && dimensions().height >= 16}>
-        <text fg={theme.text.muted}>wqai.morvism.ir</text>
+        <text fg={theme.text.muted}>api.houshiar-ai.ir</text>
       </Show>
     </box>
   )
