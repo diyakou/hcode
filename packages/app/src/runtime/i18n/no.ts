@@ -869,7 +869,7 @@ export const dict = {
   "desktop.menu.installCli": "Installer CLI...",
   "desktop.cli.installed.title": "CLI installert",
   "desktop.cli.installed.message":
-    "CLI-en ble installert i {{path}}.\n\nStart terminalen på nytt for å bruke kommandoen 'opencode2'.",
+    "CLI-en ble installert i {{path}}.\n\nStart terminalen på nytt for å bruke kommandoen 'hoshcode'.",
   "desktop.cli.failed.title": "Installasjonen mislyktes",
   "desktop.cli.failed.message": "Kunne ikke installere CLI-en: {{error}}",
   "command.project.copyID": "Kopier prosjekt-ID",

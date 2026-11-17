@@ -610,7 +610,7 @@ export const dict = {
   "desktop.menu.installCli": "CLI quraşdır...",
   "desktop.cli.installed.title": "CLI quraşdırıldı",
   "desktop.cli.installed.message":
-    "CLI {{path}} ünvanına quraşdırıldı\n\n'opencode2' əmrindən istifadə etmək üçün terminalı yenidən başladın.",
+    "CLI {{path}} ünvanına quraşdırıldı\n\n'hoshcode' əmrindən istifadə etmək üçün terminalı yenidən başladın.",
   "desktop.cli.failed.title": "Quraşdırma uğursuz oldu",
   "desktop.cli.failed.message": "CLI quraşdırmaq mümkün olmadı: {{error}}",
   "command.project.copyID": "Layihə ID-sini kopyala",

@@ -8,7 +8,7 @@ if dry_run; then
 fi
 powershell -NoProfile -Command "
   \$ErrorActionPreference = 'Stop'
-  \$files = Get-ChildItem '$(cygpath -w "$(posix "$1")")' -Recurse -Include *.exe, *.node
+  \$files = Get-ChildItem '$(cygpath -w "$(posix "$1")")' -Recurse -Include *.exe, *.node, *.msix
   if (-not \$files) { throw 'No signed files found' }
   foreach (\$file in \$files) {
     \$sig = Get-AuthenticodeSignature \$file.FullName

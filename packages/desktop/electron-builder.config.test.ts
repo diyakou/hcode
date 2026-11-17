@@ -18,6 +18,23 @@ const channels = [
   { channel: "prod", appId: "ai.opencode.desktop", feed: "latest" },
 ] as const
 
+test.each(["dev", "beta", "prod"])("MSIX certificate identity for %s", (channel) => {
+  const previous = process.env.OPENCODE_MSIX_PUBLISHER
+  try {
+    delete process.env.OPENCODE_MSIX_PUBLISHER
+    expect(load(channel).win?.target).toEqual(["nsis"])
+    process.env.OPENCODE_MSIX_PUBLISHER = "CN=Houshiar Test"
+    const config = load(channel)
+    expect(config.win?.target).toEqual(["nsis", "appx"])
+    expect(config.appx?.publisher).toBe("CN=Houshiar Test")
+    expect(config.appx?.identityName).toBe(config.appId)
+    expect(config.appx?.artifactName).toBe("opencode-desktop-win-${arch}.msix")
+  } finally {
+    if (previous === undefined) delete process.env.OPENCODE_MSIX_PUBLISHER
+    else process.env.OPENCODE_MSIX_PUBLISHER = previous
+  }
+})
+
 function load(channel: string, target?: string): Configuration {
   const previous = process.env.OPENCODE_CHANNEL
   const previousTarget = process.env.OPENCODE_TARGET

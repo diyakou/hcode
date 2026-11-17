@@ -81,3 +81,10 @@ written to `dist/bench-startup`.
 A packaged beta or prod build registers itself as the `opencode://` handler when it starts, even from the bench; the
 installed app takes the registration back on its next launch. Those channels run with `HTTPS_PROXY` pointed at a
 closed port (`--offline` forces it for dev) so the updater's first check fails fast instead of reaching GitHub.
+# Windows MSIX
+
+Set the repository Actions variable `OPENCODE_MSIX_PUBLISHER` to the exact certificate subject (for example `CN=Your Company, O=Your Company, C=US`) used by the Azure signing profile. Windows release jobs then produce `.msix` packages alongside NSIS installers for x64 and ARM64, sign them, verify their signatures, and publish them. Without this variable the existing NSIS release remains available.
+
+For local packaging, set `OPENCODE_TARGET=windows-x64` (or `windows-arm64`), `OPENCODE_MSIX_PUBLISHER`, and `OPENCODE_DESKTOP_APP` to an absolute path containing the unpacked app, then run `bun run pack` from this directory on Windows. Local output is unsigned and must be signed with a matching trusted certificate before installation. The pinned electron-builder v26 uses its `appx` target with an explicit `.msix` artifact name.
+
+MSIX updates are installed through Windows package deployment; the existing electron-updater feed continues to contain NSIS installers only. MSIX packaging alone does not supply a signing certificate or establish trust for an unsigned server executable.

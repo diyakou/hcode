@@ -18,6 +18,7 @@ Options:
     -h, --help              Display this help message
     -v, --version <version> Install a specific version (e.g., 0.0.0-beta-17236)
     -b, --binary <path>     Install from a local binary instead of downloading
+        --hoshcode          Install local binary as hoshcode without an OpenCode shim
         --no-modify-path    Don't modify shell config files (.zshrc, .bashrc, etc.)
 
 Examples:
@@ -55,6 +56,10 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             ;;
+        --hoshcode)
+            APP=hoshcode
+            shift
+            ;;
         --no-modify-path)
             no_modify_path=true
             shift
@@ -65,6 +70,11 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ "$APP" == "hoshcode" && -z "$binary_path" ]]; then
+    echo -e "${RED}Error: --hoshcode requires --binary${NC}" >&2
+    exit 1
+fi
 
 INSTALL_DIR=$HOME/.opencode/bin
 mkdir -p "$INSTALL_DIR"
@@ -371,7 +381,9 @@ else
     check_version
     download_and_install
 fi
-install_legacy_shim
+if [[ "$APP" == "opencode" ]]; then
+    install_legacy_shim
+fi
 
 
 path_added=false
@@ -485,7 +497,7 @@ if [[ $path_added == "true" ]]; then
     echo -e "exec \$SHELL   ${MUTED}# Reload PATH (or open a new terminal)${NC}"
 fi
 echo -e "cd <project>  ${MUTED}# Open directory${NC}"
-echo -e "opencode      ${MUTED}# Run command${NC}"
+echo -e "$APP      ${MUTED}# Run command${NC}"
 echo -e ""
 echo -e "${MUTED}For more information visit ${NC}https://opencode.ai/v2/docs"
 echo -e ""

@@ -1,3 +1,5 @@
+!define HOUSHIAR_CLI_PATH_SCRIPT "${__FILEDIR__}\cli-path.ps1"
+
 ; electron-builder names a one-click per-user install directory after the package name, which every
 ; channel shares, so OpenCode, OpenCode Beta and OpenCode Dev all installed into one "@opencodedesktop"
 ; directory and each channel's installer and uninstaller replaced or deleted the others' files.
@@ -31,6 +33,13 @@
   nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$INSTDIR" /grant "*S-1-15-2-2:(OI)(CI)(RX)"'
   Pop $0
   !insertmacro leaveSharedInstall
+  CreateDirectory "$INSTDIR\bin"
+  ClearErrors
+  CopyFiles /SILENT "$INSTDIR\resources\opencode-cli.exe" "$INSTDIR\bin\hoshcode.exe"
+  ${If} ${Errors}
+    Abort
+  ${EndIf}
+  !insertmacro updateCliPath "install"
 !macroend
 
 ; Removes this channel's files from the shared directory, and the directory with the files every
@@ -55,7 +64,20 @@
 
 !macro customUnInstall
   ${IfNot} ${isUpdated}
+    !insertmacro updateCliPath "uninstall"
     !insertmacro removeStagedUpdates $INSTDIR
+  ${EndIf}
+!macroend
+
+!macro updateCliPath ACTION
+  InitPluginsDir
+  File /oname=$PLUGINSDIR\cli-path.ps1 "${HOUSHIAR_CLI_PATH_SCRIPT}"
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\cli-path.ps1" -Action ${ACTION} -Directory "$INSTDIR\bin" -AppId "${APP_ID}"'
+  Pop $0
+  ${If} $0 == 0
+    System::Call 'user32::SendMessageTimeoutW(p 0xffff, i 0x1a, p 0, w "Environment", i 2, i 5000, *p .r1)'
+  ${Else}
+    DetailPrint "Could not update user PATH (exit $0)"
   ${EndIf}
 !macroend
 

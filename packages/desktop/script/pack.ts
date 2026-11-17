@@ -37,6 +37,8 @@ if (app) {
   await $`bun ./script/copy-icons.ts ${resolveChannel()}`
   await $`bunx electron-builder ${flags} --prepackaged ${app}`
   await cp(`dist/opencode-desktop-win-${cli.cpu}.exe`, path.join(out, `opencode-desktop-win-${cli.cpu}.exe`))
+  if (process.env.OPENCODE_MSIX_PUBLISHER)
+    await cp(`dist/opencode-desktop-win-${cli.cpu}.msix`, path.join(out, `opencode-desktop-win-${cli.cpu}.msix`))
 }
 
 if (!app && os === "linux") {

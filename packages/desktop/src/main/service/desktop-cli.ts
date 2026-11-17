@@ -43,7 +43,7 @@ export const layer = Layer.effect(
       const home = app.getPath("home")
       yield* runInstaller(cli.binary, home)
 
-      return path.join(home, ".opencode", "bin", "opencode")
+      return path.join(home, ".opencode", "bin", "hoshcode")
     })
 
     return Service.of({ resolve, install })
@@ -190,7 +190,7 @@ const runInstaller = Effect.fn("DesktopCli.installForUser")(function* (binary: s
   yield* Effect.tryPromise({
     try: () =>
       new Promise<void>((resolve, reject) => {
-        const child = spawn("/bin/bash", ["-s", "--", "--binary", binary], {
+        const child = spawn("/bin/bash", ["-s", "--", "--binary", binary, "--hoshcode"], {
           env: { ...process.env, HOME: home },
           stdio: ["pipe", "ignore", "pipe"],
         })

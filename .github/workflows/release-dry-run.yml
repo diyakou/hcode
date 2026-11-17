@@ -354,6 +354,7 @@ jobs:
         env:
           OPENCODE_TARGET: ${{ matrix.target }}
           OPENCODE_DESKTOP_APP: ${{ runner.temp }}/app/app
+          OPENCODE_MSIX_PUBLISHER: ${{ vars.OPENCODE_MSIX_PUBLISHER }}
       - name: Upload
         uses: ./.github/release/upload
         with:
@@ -458,7 +459,7 @@ jobs:
           signing-account-name: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
           certificate-profile-name: ${{ secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE }}
           files-folder: ${{ runner.temp }}\work
-          files-folder-filter: exe,node
+          files-folder-filter: exe,node,msix
           files-folder-recurse: true
           exclude-environment-credential: true
           exclude-workload-identity-credential: true
@@ -510,7 +511,7 @@ jobs:
         with:
           pattern: build-desktop-windows-installer-*
       - name: Unpack
-        run: mkdir -p "$RUNNER_TEMP/work" && cp "$RUNNER_TEMP"/in/build-desktop-windows-installer-*/*.exe "$RUNNER_TEMP/work/"
+        run: mkdir -p "$RUNNER_TEMP/work" && find "$RUNNER_TEMP"/in/build-desktop-windows-installer-* -maxdepth 1 -type f \( -name "*.exe" -o -name "*.msix" \) -exec cp {} "$RUNNER_TEMP/work/" \;
       - *azure-login
       - *azure-sign
       - name: Repack

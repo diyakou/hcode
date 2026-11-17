@@ -99,8 +99,10 @@ jobs:
           if [[ "${{ matrix.target }}" != "darwin-x64" ]]; then
             "$binary" --version | grep -F "$RELEASE_VERSION"
           fi
-          mkdir -p release
-          tar -czf "release/houshiar-${RELEASE_VERSION}-${{ matrix.target }}-cli.tar.gz" -C "packages/cli/dist/cli-${{ matrix.cli }}" bin
+          mkdir -p release/cli/bin
+          cp "$binary" "release/cli/bin/${{ runner.os == 'Windows' && 'hoshcode.exe' || 'hoshcode' }}"
+          tar -czf "release/houshiar-${RELEASE_VERSION}-${{ matrix.target }}-cli.tar.gz" -C release/cli bin
+          rm -rf release/cli
       - name: Build desktop with customized CLI
         working-directory: packages/desktop
         run: bun run build

@@ -19,6 +19,8 @@ const rpmNoBuildIdLinksFpm = "--rpm-rpmbuild-define=_build_id_links none"
 const metainfoFpm = (appId: string) =>
   `${path.join(packageDir, "resources", `${appId}.metainfo.xml`)}=/usr/share/metainfo/${appId}.metainfo.xml`
 
+const cliFpm = `${path.join(packageDir, "resources", "opencode-cli")}=/usr/bin/hoshcode`
+
 // Dev and beta package every commit, so they trade about 5% (deb) and 17% (rpm) larger files for xz -1, which
 // compresses the payload about 3x faster than the deb default (-3) and 5x faster than the rpm default (-9).
 const previewCompressionFpm = (target: "deb" | "rpm") => [`--${target}-compression-level`, "1"]
@@ -171,8 +173,14 @@ const getBase = (appId: string): Configuration => {
     },
     win: {
       icon: `resources/icons/icon.ico`,
-      target: ["nsis"],
+      target: process.env.OPENCODE_MSIX_PUBLISHER ? ["nsis", "appx"] : ["nsis"],
       verifyUpdateCodeSignature: false,
+    },
+    appx: {
+      artifactName: "opencode-desktop-win-${arch}.msix",
+      identityName: appId,
+      publisher: process.env.OPENCODE_MSIX_PUBLISHER,
+      publisherDisplayName: "Houshiar",
     },
     nsis: {
       include: path.join(packageDir, "resources", "windows", "installer.nsh"),
@@ -217,10 +225,10 @@ export function getConfig() {
           url: "https://github.com/diyakou/hcode/releases/latest/download/",
           channel: "latest",
         },
-        deb: { fpm: [...previewCompressionFpm("deb"), metainfoFpm(appId)] },
+        deb: { fpm: [...previewCompressionFpm("deb"), metainfoFpm(appId), cliFpm] },
         rpm: {
           packageName: "houshiar-dev",
-          fpm: [rpmNoBuildIdLinksFpm, ...previewCompressionFpm("rpm"), metainfoFpm(appId)],
+          fpm: [rpmNoBuildIdLinksFpm, ...previewCompressionFpm("rpm"), metainfoFpm(appId), cliFpm],
         },
       }
     }
@@ -236,10 +244,10 @@ export function getConfig() {
           url: "https://github.com/diyakou/hcode/releases/latest/download/",
           channel: "latest",
         },
-        deb: { fpm: [...previewCompressionFpm("deb"), metainfoFpm(appId)] },
+        deb: { fpm: [...previewCompressionFpm("deb"), metainfoFpm(appId), cliFpm] },
         rpm: {
           packageName: "houshiar-beta",
-          fpm: [rpmNoBuildIdLinksFpm, ...previewCompressionFpm("rpm"), metainfoFpm(appId)],
+          fpm: [rpmNoBuildIdLinksFpm, ...previewCompressionFpm("rpm"), metainfoFpm(appId), cliFpm],
         },
       }
     }
@@ -260,8 +268,8 @@ export function getConfig() {
           url: "https://github.com/diyakou/hcode/releases/latest/download/",
           channel: "latest",
         },
-        deb: { fpm: [metainfoFpm(appId)] },
-        rpm: { packageName: "houshiar", fpm: [rpmNoBuildIdLinksFpm, metainfoFpm(appId)] },
+        deb: { fpm: [metainfoFpm(appId), cliFpm] },
+        rpm: { packageName: "houshiar", fpm: [rpmNoBuildIdLinksFpm, metainfoFpm(appId), cliFpm] },
       }
     }
   }
