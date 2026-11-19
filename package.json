@@ -133,9 +133,13 @@
     "@opencode/script": "workspace:*",
     "typescript": "catalog:"
   },
+  "homepage": "https://houshiar-ai.ir",
   "repository": {
     "type": "git",
-    "url": "https://github.com/anomalyco/opencode"
+    "url": "https://github.com/diyakou/hcode"
+  },
+  "bugs": {
+    "url": "https://github.com/diyakou/hcode/issues"
   },
   "license": "MIT",
   "prettier": {

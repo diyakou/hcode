@@ -1,4 +1,6 @@
-# Contributing to OpenCode
+# Contributing to Houshiar (Hooshcode)
+
+This repository is the open-source [Houshiar](https://houshiar-ai.ir) coding agent. Accounts, API keys, pricing and API docs live on [houshiar-ai.ir](https://houshiar-ai.ir).
 
 The changes most likely to be accepted are:
 
@@ -107,6 +109,6 @@ Examples:
 
 ## Issues
 
-Bug reports and feature requests must use their issue templates. Blank issues are not allowed; ask support and how-to questions in the [Discord community](https://discord.gg/opencode).
+Bug reports and feature requests must use their issue templates. Blank issues are not allowed; ask support and how-to questions in the [Houshiar Telegram support](https://t.me/lildevelop) or the project [issues](https://github.com/diyakou/hcode/issues). For accounts, billing and API keys, see [houshiar-ai.ir](https://houshiar-ai.ir) and the [API docs](https://houshiar-ai.ir/%D9%85%D8%B3%D8%AA%D9%86%D8%AF%D8%A7%D8%AA-api).
 
 Automated checks flag missing templates, placeholder text, AI-generated walls of text, and missing meaningful content. You have two hours to correct a flagged issue before it closes automatically. Ask a maintainer if an issue was flagged incorrectly.

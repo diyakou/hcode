@@ -2,6 +2,8 @@
 
 This checkout uses Houshiar as its only model provider. Users connect their own API key in the first-run dialog or with `/connect`. Credentials use the existing server credential store; they are not embedded in the application or sent to the renderer for gateway requests.
 
+Site, pricing, account and API docs: [houshiar-ai.ir](https://houshiar-ai.ir) · [API docs](https://houshiar-ai.ir/%D9%85%D8%B3%D8%AA%D9%86%D8%AF%D8%A7%D8%AA-api) · [pricing](https://houshiar-ai.ir/%D9%82%DB%8C%D9%85%D8%AA-%D9%88-%D8%AA%D8%B9%D8%B1%D9%81%D9%87) · [download](https://houshiar-ai.ir/%D8%AF%D8%A7%D9%86%D9%84%D9%88%D8%AF-hooshcode) · [support](https://t.me/lildevelop)
+
 The gateway base URL is `https://api.houshiar-ai.ir/v1` (defined in `packages/schema/src/houshiar.ts`).
 
 - `GET /v1/models` supplies the model picker. Full IDs, including prefixes such as `1hosh/`, are preserved.
