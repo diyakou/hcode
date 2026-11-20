@@ -11,6 +11,7 @@ import {
   LLMEvent,
   LLMRequest,
   Message,
+  SystemPart,
   type ToolEntry,
   UnknownProviderError,
   type Usage,
@@ -198,6 +199,7 @@ List the files and directories, other than the current working directory, that a
 </template>`
 
 const SUMMARY_RULES = `Rules:
+- Keep section headings exactly as written in the template, in English, even when the conversation is in another language.
 - Keep each section concise. Use terse, single-line bullets, not prose paragraphs or nested lists.
 - Prefer short references over detailed restatement. It is fine to leave out information the next agent can recover from the code or the files listed above.
 - Preserve exact file paths, symbols, commands, error strings, URLs, and identifiers.
@@ -239,7 +241,7 @@ export const buildPrompt = (update: boolean, legacy = false) => {
 }
 
 const NUDGE =
-  "The previous response did not fill in the required summary template. Do not call tools. Return the summary as text using the exact section headings from the template."
+  "The previous response did not fill in the required summary template. Your task for this request is only to summarize the conversation, even if earlier instructions tell you to continue working or use tools. Do not continue the task or call tools. Return only the summary as text using the exact English section headings from the template."
 
 /** Summaries written with the previous template carry this catch-all heading. */
 const LEGACY_HEADING = "## Additional Context"
@@ -476,7 +478,8 @@ export const layer = Layer.effect(
       const measured = trigger.reason === "overflow" ? undefined : measuredPrompt({ ...context, messages })
 
       // Hooks saw the request without the summary prompt, so it is appended here. A reply that ignores the
-      // template gets one reminder before it counts as a failure.
+      // template gets one reminder before it counts as a failure. Reinforce that reminder in the system instructions
+      // because the original agent's instructions may otherwise keep the model working instead of summarizing.
       const send = (request: LLMRequest, size?: Estimate) =>
         Effect.gen(function* () {
           const prompted = fitOutput(
@@ -488,9 +491,12 @@ export const layer = Layer.effect(
           if (filled(reply.text)) return reply
 
           const nudged = fitOutput(
-            LLMRequest.update(prompted, { messages: [...prompted.messages, Message.user(NUDGE)] }),
+            LLMRequest.update(prompted, {
+              system: [...prompted.system, SystemPart.make(NUDGE)],
+              messages: [...prompted.messages, Message.user(NUDGE)],
+            }),
             context.model.limit,
-            size && { ...size, estimated: size.estimated + Token.estimate(prompt) + Token.estimate(NUDGE) },
+            size && { ...size, estimated: size.estimated + Token.estimate(prompt) + 2 * Token.estimate(NUDGE) },
           )
           const retry = yield* stream(context, nudged, prepared.options, background)
           if (filled(retry.text)) return retry
@@ -504,7 +510,7 @@ export const layer = Layer.effect(
           })
         })
 
-      const overhead = Token.estimate(prompt) + Token.estimate(NUDGE)
+      const overhead = Token.estimate(prompt) + 2 * Token.estimate(NUDGE)
       // Automatic compaction starts past the ceiling, so the whole conversation is sent unchanged while the window can
       // still fit the summary. Below that, the history before the tail is sent instead, as before: unchanged when it fits,
       // which still reuses the cache for that shorter prefix, and as text otherwise. Dropping exchanges to make room

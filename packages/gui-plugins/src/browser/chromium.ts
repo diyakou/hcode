@@ -915,6 +915,13 @@ export function createBrowserPage(
       case "press":
         await key(action.key)
         break
+      case "scroll_to_ref":
+        await cdp.send("DOM.scrollIntoViewIfNeeded", { backendNodeId: target(action.ref).backendID }, target(action.ref).sessionID)
+        break
+      case "viewport": {
+        if (action.size) view.setBounds({ x: 0, y: 0, ...action.size })
+        return result({ tab: state(), viewport: { width: view.getBounds().width, height: view.getBounds().height } })
+      }
       case "scroll": {
         const bounds = view.getBounds()
         await cdp.send("Input.dispatchMouseEvent", {

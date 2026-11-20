@@ -17,6 +17,10 @@ const limit = optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 
 const timeoutMs = optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 30_000 }))).annotate({
   description: "Timeout in milliseconds, 1–30000. Default 10000.",
 })
+const viewport = Schema.Struct({
+  width: Schema.Int.check(Schema.isBetween({ minimum: 320, maximum: 4_000 })),
+  height: Schema.Int.check(Schema.isBetween({ minimum: 240, maximum: 4_000 })),
+})
 export const TabID = Schema.String.check(Schema.isPattern(/^tab_[a-f0-9-]{36}$/u))
   .pipe(Schema.brand("Browser.TabID"))
   .annotate({ identifier: "Browser.TabID" })
@@ -306,6 +310,18 @@ export const Operations = [
       deltaY: Schema.Int.check(Schema.isBetween({ minimum: -10_000, maximum: 10_000 })),
     },
     Tab,
+  ),
+  operation(
+    "scroll_to_ref",
+    "Scroll an element ref into view and return the tab state.",
+    target,
+    Tab,
+  ),
+  operation(
+    "viewport",
+    "Get or set viewport size in CSS pixels.",
+    { ...tab, size: optional(viewport) },
+    Schema.Struct({ ...page, viewport }),
   ),
   operation(
     "wait",
