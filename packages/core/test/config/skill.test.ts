@@ -429,6 +429,32 @@ describe("ConfigSkillPlugin.Plugin", () => {
     ),
   )
 
+  it.live("discovers Claude skills directory created after startup", () =>
+    Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
+      Effect.flatMap((tmp) =>
+        Effect.gen(function* () {
+          const claude = path.join(tmp.path, ".claude")
+          const skills = path.join(claude, "skills")
+          yield* Effect.promise(() => fs.mkdir(claude, { recursive: true }))
+          const service = yield* startEntries([], tmp.path, tmp.path, emptyDiscovery, {
+            claude: [AbsolutePath.make(claude)],
+            agents: [],
+          })
+          const watcher = yield* Watcher.Test
+          expect(yield* service.list()).toEqual([])
+          expect(yield* watcher.subscriptions()).toContainEqual({ path: skills, type: "file" })
+
+          yield* Effect.promise(async () => {
+            await fs.mkdir(path.join(skills, "review"), { recursive: true })
+            await write(skills, "review", "Claude skill")
+          })
+          yield* emitAndWait({ type: "create", path: skills })
+          expect((yield* service.list()).map((item) => item.id)).toEqual([Skill.ID.make("review")])
+        }),
+      ),
+    ),
+  )
+
   it.effect("ignores unrelated config updates and coalesces compatibility bursts into one reload", () =>
     Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
       Effect.flatMap((tmp) =>

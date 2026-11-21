@@ -38,6 +38,12 @@ export const Plugin = define({
       )
     })
 
+    function firstMissing(target: string): Effect.Effect<string | undefined> {
+      const parent = path.dirname(target)
+      if (parent === target) return Effect.undefined
+      return fs.isDir(parent).pipe(Effect.flatMap((exists) => (exists ? Effect.succeed(target) : firstMissing(parent))))
+    }
+
     const refresh = Effect.fn("ConfigCompatibilityPlugin.refresh")(
       function* () {
         yield* FiberMap.clear(watches)
@@ -46,7 +52,11 @@ export const Plugin = define({
         const loaded = new Map<Skill.ID, Skill.Info>()
         for (const directory of directories) {
           const resolved = yield* fs.realPath(directory).pipe(Effect.orElseSucceed(() => undefined))
-          if (!resolved) continue
+          if (!resolved) {
+            const missing = yield* firstMissing(directory)
+            if (missing) yield* watch(missing, "file")
+            continue
+          }
           yield* watch(resolved, "directory")
           for (const filepath of yield* SkillScan.scan(resolved)) {
             const content = yield* fs.readFileStringSafe(filepath).pipe(Effect.orElseSucceed(() => undefined))
