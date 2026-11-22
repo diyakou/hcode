@@ -85,7 +85,7 @@ export const HoushiarPlugin = define({
       "http.request",
       (event) =>
         Effect.gen(function* () {
-          if (event.kind === "primary") return
+          // if (event.kind === "primary") return // Re-enable with the server-side history middleware.
           const body = Option.getOrUndefined(decodeBody(yield* Effect.promise(() => event.request.clone().text())))
           if (!body) return
           const headers = new Headers(event.request.headers)

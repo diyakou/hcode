@@ -127,14 +127,14 @@ it.effect("keeps only Houshiar model access and API-key sign-in while preserving
   ),
 )
 
-it.effect("keeps auxiliary requests stateless and strips inherited conversation identity", () =>
+it.effect("keeps session requests stateless and strips inherited conversation identity", () =>
   Effect.gen(function* () {
     const plugin = yield* Plugin.Service
     const host = yield* PluginHost.make(plugin)
     const hooks = yield* PluginHooks.Service
     yield* HoushiarPlugin.effect(host)
     yield* Effect.forEach(["messages", "chat/completions"], (route) =>
-      Effect.forEach(["title", "compaction", "generate"] as const, (kind) =>
+      Effect.forEach(["primary", "title", "compaction", "generate"] as const, (kind) =>
         Effect.gen(function* () {
           const request = new Request(`${Houshiar.baseURL}/${route}`, {
             method: "POST",

@@ -3,8 +3,8 @@ export * as HoushiarGateway from "./houshiar.js"
 import { Houshiar } from "@opencode/schema/houshiar"
 import { Model } from "@opencode/schema/model"
 import { Provider } from "@opencode/schema/provider"
-import { Effect, Option, Schema } from "effect"
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
+import { Effect, Option, Schedule, Schema } from "effect"
+import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http"
 import { Variant } from "./variant.js"
 
 const RemoteModel = Schema.Struct({
@@ -37,7 +37,15 @@ export const conversation = (http: HttpClient.HttpClient, authorization: string,
         HttpClientRequest.setHeader("authorization", authorization),
       ),
     )
-    .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Houshiar.ConversationHistory)), Effect.timeout("20 seconds"))
+    .pipe(
+      Effect.flatMap(HttpClientResponse.schemaBodyJson(Houshiar.ConversationHistory)),
+      Effect.retry({
+        times: 2,
+        schedule: Schedule.spaced("500 millis"),
+        while: (error) => HttpClientError.isHttpClientError(error) && error.reason._tag === "TransportError",
+      }),
+      Effect.timeout("20 seconds"),
+    )
 
 export const conversations = (http: HttpClient.HttpClient, authorization: string, offset = 0) =>
   HttpClient.filterStatusOk(http)
