@@ -11,6 +11,7 @@ import CONTINUATION from "./mission/continuation.txt"
 import JUDGE from "./mission/judge.txt"
 import KICKOFF from "./mission/kickoff.txt"
 import REMINDER from "./mission/reminder.txt"
+import { MissionTool } from "../tool/plugin/mission-update.js"
 
 export const MAX_REQUEST = 4_000
 export const MAX_ROUNDS = 50
@@ -46,6 +47,7 @@ export const Plugin = define({
         Effect.catchCause((cause) => Effect.logWarning("failed to publish mission change", { sessionID, cause })),
       )
     })
+    yield* MissionTool.register(ctx, (sessionID, mission) => write(sessionID, mission))
     const replace = Effect.fn("MissionPlugin.replace")(function* (sessionID: Session.ID, expected: State, next: State) {
       const current = yield* read(sessionID)
       if (current?.id !== expected.id || current.updatedAt !== expected.updatedAt || current.status !== expected.status)

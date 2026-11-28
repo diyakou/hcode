@@ -34,41 +34,47 @@ export const summarize = (steps: ReadonlyArray<Mission.Step>) => {
   return `Mission plan updated: ${counts}${active.length ? `. In progress: ${active.join(", ")}` : ""}`
 }
 
-export const Plugin = {
-  id: "opencode.tool.mission",
-  effect: Effect.fn("MissionTool.Plugin")(function* (ctx: Context) {
-    const permission = yield* Permission.Service
-    yield* ctx.tool
-      .transform((editor) =>
-        editor.add({
-          name,
-          options: { codemode: false },
-          description: DESCRIPTION,
-          input: Input,
-          output: Output,
-          execute: (input, context) =>
-            ctx.storage.get(`session:${context.sessionID}`).pipe(
-              Effect.flatMap((stored) => {
-                const mission = stored === undefined ? undefined : Schema.decodeUnknownOption(Mission.State)(stored)
-                if (mission === undefined || mission._tag === "None") return new ToolFailure({ message: "No mission is active in this session." })
-                return ctx.storage.set(`session:${context.sessionID}`, {
-                  ...mission.value,
-                  steps: input.steps,
-                  updatedAt: Date.now(),
-                })
-              }),
-              Effect.mapError((error) =>
-                error instanceof ToolFailure ? error : new ToolFailure({ message: "Unable to update the mission plan", error }),
-              ),
+export const register = Effect.fn("MissionTool.register")(function* (
+  ctx: Context,
+  write: (sessionID: string, mission: Mission.State) => Effect.Effect<void>,
+) {
+  const permission = yield* Permission.Service
+  yield* ctx.tool
+    .transform((editor) =>
+      editor.add({
+        name,
+        options: { codemode: false },
+        description: DESCRIPTION,
+        input: Input,
+        output: Output,
+        execute: (input, context) =>
+          permission
+            .assert({
+              action: name,
+              resources: ["*"],
+              save: ["*"],
+              sessionID: context.sessionID,
+              agent: context.agent,
+              source: { type: "tool", messageID: context.messageID, id: context.id },
+            })
+            .pipe(
+              Effect.mapError((error) => new ToolFailure({ message: "Unable to update the mission plan", error })),
               Effect.andThen(
-                permission.assert({
-                  action: name,
-                  resources: ["*"],
-                  save: ["*"],
-                  sessionID: context.sessionID,
-                  agent: context.agent,
-                  source: { type: "tool", messageID: context.messageID, id: context.id },
-                }).pipe(Effect.mapError((error) => new ToolFailure({ message: "Unable to update the mission plan", error }))),
+                ctx.storage.get(`session:${context.sessionID}`).pipe(
+                  Effect.flatMap((stored) => {
+                    const mission = stored === undefined ? undefined : Schema.decodeUnknownOption(Mission.State)(stored)
+                    if (mission === undefined || mission._tag === "None")
+                      return new ToolFailure({ message: "No mission is active in this session." })
+                    return write(context.sessionID, {
+                      ...mission.value,
+                      steps: input.steps,
+                      updatedAt: Date.now(),
+                    })
+                  }),
+                  Effect.mapError((error) =>
+                    error instanceof ToolFailure ? error : new ToolFailure({ message: "Unable to update the mission plan", error }),
+                  ),
+                ),
               ),
               Effect.as({
                 output: { steps: input.steps },
@@ -76,8 +82,7 @@ export const Plugin = {
                 metadata: { steps: input.steps },
               }),
             ),
-        }),
-      )
-      .pipe(Effect.orDie)
-  }),
-}
+      }),
+    )
+    .pipe(Effect.orDie)
+})
