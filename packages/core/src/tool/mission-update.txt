@@ -1,0 +1,9 @@
+Create or update the mission's step plan. Only available while a mission is active.
+
+The plan is the task breakdown for the user's mission request. The user sees it live, so keep it accurate.
+
+- Send the full list on every call; it replaces the previous one. Keep step IDs stable: reuse the ID of a step you are updating, and only mint new IDs for new steps.
+- Keep steps concrete and verifiable: each needs a title and a detail saying what that step must produce.
+- Mark a step `in_progress` when you start it and `done` only after verifying its result, recording what proves it in `evidence`: command output, test results, or the file that now exists.
+- Mark a step `failed` when it cannot be completed, with the reason in `evidence`, and stop; the reviewer decides whether the mission can continue.
+- Only call it when the plan or a step's status changes.

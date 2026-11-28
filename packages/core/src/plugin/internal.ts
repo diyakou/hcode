@@ -87,6 +87,7 @@ import { ShellTool } from "../tool/plugin/shell.js"
 import { SkillTool } from "../tool/plugin/skill.js"
 import { SubagentTool } from "../tool/plugin/subagent.js"
 import { TodoTool } from "../tool/plugin/todo.js"
+import { MissionTool } from "../tool/plugin/mission-update.js"
 import { Tool } from "../tool.js"
 import { ToolOutput } from "../tool-output.js"
 import { WebFetchTool } from "../tool/plugin/webfetch.js"
@@ -99,6 +100,7 @@ import { CommandPlugin } from "./command.js"
 import { IdentityPlugin } from "./identity.js"
 import { PlanPlugin } from "./plan.js"
 import { GoalPlugin } from "./goal.js"
+import { MissionPlugin } from "./mission.js"
 import { McpCodeModeDefaultsPlugin } from "./mcp-codemode-defaults.js"
 import { HoushiarPlugin } from "./provider/houshiar.js"
 import { DynamicProviderPlugin } from "./provider/dynamic.js"
@@ -239,6 +241,7 @@ const pre = [
   PlanPlugin.Plugin,
   CommandPlugin.Plugin,
   GoalPlugin.Plugin,
+  MissionPlugin.Plugin,
   SkillPlugin.Plugin,
   VcsHgPlugin.Plugin,
   ...WebSearchPlugins,
@@ -261,6 +264,7 @@ const pre = [
   SkillTool.Plugin,
   SubagentTool.Plugin,
   TodoTool.Plugin,
+  MissionTool.Plugin,
   WebFetchTool.Plugin,
   WebSearchTool.Plugin,
   WriteTool.Plugin,
