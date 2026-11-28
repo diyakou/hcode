@@ -31,7 +31,27 @@ const setup: Plugin.Setup<typeof MissionDefinition> = (ctx) => {
           "changed",
           (event) => {
             if (event.data.sessionID === session.id) heard.value = true
-            setMissions(key(server, event.data.sessionID), { mission: event.data.mission })
+            const missionKey = key(server, event.data.sessionID)
+            const previous = missions[missionKey]?.mission
+            const next = event.data.mission
+            setMissions(missionKey, { mission: next })
+
+            if (previous && previous.status !== "complete" && next?.status === "complete") {
+              const notification = {
+                title: ctx.t("notification.complete.title"),
+                description: next.reason,
+                variant: "success" as const,
+              }
+
+              ctx.toast.show(notification)
+
+              void ctx.attention.notify({
+                title: notification.title,
+                message: next.reason,
+                session: { server, id: event.data.sessionID },
+                id: `${missionKey}\u0000${next.id}`,
+              })
+            }
           },
           { signal: controller.signal },
         ),

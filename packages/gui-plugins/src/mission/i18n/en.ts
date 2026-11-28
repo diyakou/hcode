@@ -5,4 +5,5 @@ export default {
   failed: "Failed",
   "pill.complete": "Mission complete",
   "pill.progress": "Mission: {{done}}/{{total}}",
+  "notification.complete.title": "Mission complete",
 }

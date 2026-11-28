@@ -9,8 +9,8 @@ ${request}
 Start now:
 
 1. Plan. Use the mission_update tool to record the task breakdown: each step's title, and a detail describing what that step must produce. Keep steps concrete and verifiable. Update the plan whenever the work reveals a better breakdown, and add steps discovered mid-work.
-2. Execute. Work through the steps in order, one per turn. Mark a step done with mission_update only after you have verified its result and recorded evidence: command output, test results, or the file that now exists. Use subagents for independent research or isolated work that does not need the conversation's context; keep integration and final verification in this session.
-3. Continue. When you end a turn, a reviewer checks the conversation against the current step and the overall request. If the step is not done yet, you are asked to continue.
+2. Execute. Work through the steps in order. Mark a step done with mission_update only after you have verified its result and recorded evidence: command output, test results, or the file that now exists. Use subagents for independent research or isolated work that does not need the conversation's context; keep integration and final verification in this session.
+3. Continue. When execution would go idle, a reviewer checks the conversation against the current step and the overall request. If work remains, continue from the recorded plan.
 
 When the last step is done, say the mission is complete and summarize what was delivered.
 

@@ -11,7 +11,8 @@ import { SessionContext } from "./context.js"
 import type { AgentNotFoundError } from "./error.js"
 import { SessionHistory } from "./history.js"
 import { SessionModelRequest } from "./model-request.js"
-import { ModelRetry } from "../model-retry.js"
+import { SessionRunnerRetry } from "./runner/retry.js"
+import { toSessionError } from "./to-session-error.js"
 import type { SessionRunnerModel } from "./runner/model.js"
 import type { SessionSchema } from "./schema.js"
 
@@ -61,8 +62,23 @@ export const generate = Effect.fn("SessionGenerate.generate")(function* (input: 
       providerID: model.ref.providerID,
       modelID: model.ref.id,
     })
-    const response = yield* llm.generate(prepared.request, prepared.options).pipe(ModelRetry.retry)
-    yield* Effect.logInfo("session generation usage diagnostic", { usage: response.usage })
-    return response.text
+    const policy = yield* SessionRunnerRetry.policy(selection.session.id)
+    while (true) {
+      const result = yield* Effect.result(llm.generate(prepared.request, prepared.options))
+      if (result._tag === "Success") {
+        yield* Effect.logInfo("session generation usage diagnostic", { usage: result.success.usage })
+        return result.success.text
+      }
+      const decision = yield* policy({
+        cause: result.failure,
+        error: toSessionError(result.failure),
+        agent: selection.agent.id,
+        model: model.ref,
+        hook: prepared.retry,
+        retry: SessionRunnerRetry.isRetryable(result.failure),
+      })
+      if (!decision.retry) return yield* Effect.fail(result.failure)
+      yield* Effect.sleep(decision.delay)
+    }
   }).pipe(instances.provide(input.session))
 })
